@@ -1,0 +1,3 @@
+[submodule "PWMK"]
+	path = PWMK
+	url = https://github.com/RectangleEquals/PWMK_Archipelago.git
