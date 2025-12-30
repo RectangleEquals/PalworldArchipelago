@@ -1,0 +1,406 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Palworld AP Mod Capability Schema",
+  "description": "Defines what a mod can randomize and how it integrates with the AP framework",
+  "type": "object",
+  "required": ["mod_info", "capabilities"],
+  "properties": {
+    "mod_info": {
+      "type": "object",
+      "description": "Basic mod identification",
+      "required": ["id", "name", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "Unique mod identifier (snake_case)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable mod name"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Semantic version (major.minor.patch)"
+        },
+        "author": {
+          "type": "string",
+          "description": "Mod author(s)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of mod functionality"
+        },
+        "ap_framework_version": {
+          "type": "string",
+          "description": "Minimum required AP framework version"
+        }
+      }
+    },
+    
+    "dependencies": {
+      "type": "object",
+      "description": "Mod dependencies and conflicts",
+      "properties": {
+        "requires": {
+          "type": "array",
+          "description": "Mods that must be present",
+          "items": {
+            "type": "object",
+            "required": ["mod_id"],
+            "properties": {
+              "mod_id": {"type": "string"},
+              "min_version": {"type": "string"}
+            }
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "description": "Mods that cannot be used together",
+          "items": {"type": "string"}
+        },
+        "optional": {
+          "type": "array",
+          "description": "Mods that enhance functionality if present",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    
+    "capabilities": {
+      "type": "object",
+      "description": "What this mod can randomize",
+      "properties": {
+        "locations": {
+          "type": "array",
+          "description": "AP locations provided by this mod",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique location identifier within mod scope"
+              },
+              "name": {
+                "type": "string",
+                "description": "Human-readable location name"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chest", "boss_drop", "npc_reward", "quest", "exploration", "tech_tree", "achievement", "custom"],
+                "description": "Location category"
+              },
+              "classification": {
+                "type": "string",
+                "enum": ["default", "priority", "excluded"],
+                "default": "default",
+                "description": "AP location classification"
+              },
+              "needs_runtime": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether location requires runtime enforcement"
+              },
+              "metadata": {
+                "type": "object",
+                "description": "Game-specific location data",
+                "properties": {
+                  "position": {
+                    "type": "object",
+                    "properties": {
+                      "x": {"type": "number"},
+                      "y": {"type": "number"},
+                      "z": {"type": "number"}
+                    }
+                  },
+                  "region": {"type": "string"},
+                  "original_item": {"type": "string"},
+                  "game_id": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        
+        "items": {
+          "type": "array",
+          "description": "AP items provided by this mod",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "classification"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique item identifier within mod scope"
+              },
+              "name": {
+                "type": "string",
+                "description": "Human-readable item name"
+              },
+              "classification": {
+                "type": "string",
+                "enum": ["progression", "useful", "filler", "trap"],
+                "description": "AP item classification"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1,
+                "description": "How many of this item exist in the pool"
+              },
+              "metadata": {
+                "type": "object",
+                "description": "Game-specific item data",
+                "properties": {
+                  "game_id": {"type": "string"},
+                  "stack_size": {"type": "integer"},
+                  "rarity": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        
+        "regions": {
+          "type": "array",
+          "description": "Logical regions for access rules",
+          "items": {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique region identifier"
+              },
+              "name": {
+                "type": "string",
+                "description": "Human-readable region name"
+              },
+              "connections": {
+                "type": "array",
+                "description": "Connected regions",
+                "items": {
+                  "type": "object",
+                  "required": ["target"],
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "description": "Target region ID"
+                    },
+                    "needs_runtime": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Whether connection requires runtime enforcement"
+                    },
+                    "rule": {
+                      "type": "string",
+                      "description": "Access rule expression (e.g., 'has(Sword) and has(Shield, 2)')"
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "description": {"type": "string"},
+                  "is_starting_region": {"type": "boolean"}
+                }
+              }
+            }
+          }
+        },
+        
+        "options": {
+          "type": "array",
+          "description": "Player-configurable options for this mod",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+$",
+                "description": "Option identifier (snake_case)"
+              },
+              "name": {
+                "type": "string",
+                "description": "Human-readable option name"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["bool", "choice", "range"],
+                "description": "Option value type"
+              },
+              "default": {
+                "description": "Default option value"
+              },
+              "description": {
+                "type": "string",
+                "description": "Option description for players"
+              },
+              "bool_config": {
+                "type": "object",
+                "description": "Configuration for bool type",
+                "properties": {
+                  "default": {"type": "boolean"}
+                }
+              },
+              "choice_config": {
+                "type": "object",
+                "description": "Configuration for choice type",
+                "properties": {
+                  "choices": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "default": {"type": "string"}
+                }
+              },
+              "range_config": {
+                "type": "object",
+                "description": "Configuration for range type",
+                "properties": {
+                  "min": {"type": "integer"},
+                  "max": {"type": "integer"},
+                  "default": {"type": "integer"}
+                }
+              }
+            }
+          }
+        },
+        
+        "events": {
+          "type": "array",
+          "description": "Framework events this mod listens to",
+          "items": {
+            "type": "string",
+            "enum": [
+              "onInit",
+              "onCapabilityQuery",
+              "onSeedReceived",
+              "onLocationChecked",
+              "onItemReceived",
+              "onGoalComplete",
+              "onSave",
+              "onLoad",
+              "onPlayerSpawn",
+              "onWorldLoad",
+              "custom"
+            ]
+          }
+        },
+        
+        "custom_data": {
+          "type": "object",
+          "description": "Mod-specific data not covered by standard schema",
+          "additionalProperties": true
+        }
+      }
+    },
+    
+    "runtime_requirements": {
+      "type": "object",
+      "description": "Runtime behavior and requirements",
+      "properties": {
+        "requires_save_state": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether mod needs to save/load AP state"
+        },
+        "save_state_schema": {
+          "type": "object",
+          "description": "JSON schema for mod's save state"
+        },
+        "initialization_order": {
+          "type": "integer",
+          "description": "Priority for initialization (higher = earlier)"
+        },
+        "hot_reload_safe": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether mod can be hot-reloaded"
+        }
+      }
+    }
+  },
+  
+  "examples": [
+    {
+      "mod_info": {
+        "id": "chest_shuffle",
+        "name": "Chest Location Randomizer",
+        "version": "1.0.0",
+        "author": "Example Author",
+        "description": "Randomizes items found in world chests"
+      },
+      "dependencies": {
+        "requires": [],
+        "conflicts": ["item_spawn_randomizer"]
+      },
+      "capabilities": {
+        "locations": [
+          {
+            "id": "chest_001",
+            "name": "Plateau Chest #1",
+            "type": "chest",
+            "classification": "default",
+            "needs_runtime": true,
+            "metadata": {
+              "position": {"x": 100.5, "y": 200.3, "z": 50.0},
+              "region": "starting_area",
+              "original_item": "PalSphere",
+              "game_id": "BP_Chest_001"
+            }
+          }
+        ],
+        "items": [
+          {
+            "id": "pal_sphere",
+            "name": "Pal Sphere",
+            "classification": "useful",
+            "count": 50,
+            "metadata": {
+              "game_id": "PalSphere",
+              "stack_size": 999,
+              "rarity": "common"
+            }
+          }
+        ],
+        "regions": [
+          {
+            "id": "starting_area",
+            "name": "Starting Plateau",
+            "connections": [
+              {
+                "target": "first_dungeon",
+                "needs_runtime": false,
+                "rule": "has(Pickaxe)"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "id": "shuffle_difficulty",
+            "name": "Shuffle Difficulty",
+            "type": "choice",
+            "choice_config": {
+              "choices": ["easy", "normal", "hard"],
+              "default": "normal"
+            },
+            "description": "How aggressively to randomize chest contents"
+          }
+        ],
+        "events": [
+          "onInit",
+          "onLocationChecked",
+          "onItemReceived",
+          "onSave",
+          "onLoad"
+        ]
+      }
+    }
+  ]
+}
