@@ -6,6 +6,11 @@
     Supports multiple discovery methods: config files, adapters, registry, and direct registration.
 ]]
 
+-- Configure package.path to find lunajson submodules
+-- Working directory is Binaries/Win64, so use absolute path from there
+local script_dir = "ue4ss/Mods/APFramework/Scripts/"
+package.path = package.path .. ";" .. script_dir .. "lib/?.lua;" .. script_dir .. "lib/?/init.lua"
+
 local ModRegistry = {}
 
 -- Registry state
@@ -17,7 +22,7 @@ ModRegistry.mods_dir = nil
 
 -- Discovery configuration
 ModRegistry.discovery_config = {
-    ue4ss_mods_dir = "../",  -- Relative to APFramework
+    ap_mods_dir = "Mods",  -- Subdirectory within APFramework for AP-enabled mods
     ap_registry_file = "ap_registry.json",
     adapter_dir = "adapters",
     auto_discover = true
@@ -125,8 +130,8 @@ function ModRegistry:LoadModFromEntry(entry)
         end
     elseif entry.ap_config_path then
         -- Load via config file
-        local config_path = string.format("%s/%s/%s",
-            self.discovery_config.ue4ss_mods_dir,
+        local config_path = string.format("ue4ss\\Mods\\APFramework\\%s\\%s\\%s",
+            self.discovery_config.ap_mods_dir,
             entry.mod_folder,
             entry.ap_config_path
         )
@@ -137,17 +142,25 @@ function ModRegistry:LoadModFromEntry(entry)
     return nil
 end
 
----Scan UE4SS mods directory for ap_config.json files
+---Scan APFramework/Mods directory for ap_config.json files
 ---@return table mods Array of mod configs
 function ModRegistry:DiscoverByConfigFile()
-    local mods_dir = self.discovery_config.ue4ss_mods_dir
+    local ap_mods_dir = self.discovery_config.ap_mods_dir
     local mods = {}
 
-    -- Get list of all mod folders
-    local mod_folders = self:GetDirectories(mods_dir)
+    -- Get list of all mod folders in APFramework/Mods/
+    -- Working directory is game's Binaries/Win64, so path is ue4ss/Mods/APFramework/Mods
+    local scan_path = "ue4ss\\Mods\\APFramework\\" .. ap_mods_dir
+    print(string.format("[ModRegistry] Scanning directory: %s", scan_path))
+
+    local mod_folders = self:GetDirectories(scan_path)
+    print(string.format("[ModRegistry] Found %d folders in scan", #mod_folders))
 
     for _, folder in ipairs(mod_folders) do
-        local config_path = string.format("%s/%s/ap_config.json", mods_dir, folder)
+        print(string.format("[ModRegistry] Checking folder: %s", folder))
+        -- Path for file operations - same as scan_path but for specific file
+        local config_path = string.format("ue4ss\\Mods\\APFramework\\%s\\%s\\ap_config.json", ap_mods_dir, folder)
+        print(string.format("[ModRegistry] Looking for config at: %s", config_path))
 
         if self:FileExists(config_path) then
             print(string.format("[ModRegistry] Found AP config in: %s", folder))
@@ -156,6 +169,8 @@ function ModRegistry:DiscoverByConfigFile()
             if mod then
                 table.insert(mods, mod)
             end
+        else
+            print(string.format("[ModRegistry] Config not found at: %s", config_path))
         end
     end
 
@@ -192,8 +207,8 @@ function ModRegistry:LoadModFromConfig(config_path, folder_name)
 
     -- If mod has integration script, load it
     if config.capabilities and config.capabilities.integration_script then
-        local script_path = string.format("%s/%s/%s",
-            self.discovery_config.ue4ss_mods_dir,
+        local script_path = string.format("ue4ss\\Mods\\APFramework\\%s\\%s\\%s",
+            self.discovery_config.ap_mods_dir,
             folder_name,
             config.capabilities.integration_script
         )
@@ -219,28 +234,22 @@ end
 ---@param folder_name string Mod folder name
 ---@return table capabilities Capability configuration
 function ModRegistry:BuildCapabilitiesFromConfig(config, folder_name)
-    local capabilities = {
-        mod_info = {
-            id = config.mod_id or folder_name:lower():gsub("[^a-z0-9_]", "_"),
-            name = config.mod_name or folder_name,
-            version = config.version or "1.0.0",
-            author = config.author or "Unknown"
-        },
-        capabilities = {}
+    -- Use mod_info from config if present, otherwise build from folder name
+    local mod_info = config.mod_info or {
+        id = folder_name:lower():gsub("[^a-z0-9_]", "_"),
+        name = folder_name,
+        version = "1.0.0",
+        author = "Unknown"
     }
 
-    -- Auto-discover based on config instructions
-    if config.capabilities and config.capabilities.locations then
-        for _, loc_config in ipairs(config.capabilities.locations) do
-            if loc_config.discovery_method == "scan_actors" then
-                -- In a real implementation, this would scan game world
-                -- For now, placeholder
-                capabilities.capabilities.locations = {}
-            end
-        end
-    end
-
-    return capabilities
+    -- Return structure matching what ModRegistry expects
+    return {
+        mod_info = mod_info,
+        capabilities = config.capabilities or {},
+        ap_connection = config.ap_connection,
+        dependencies = config.dependencies,
+        runtime_requirements = config.runtime_requirements
+    }
 end
 
 ---Load mods via adapter scripts

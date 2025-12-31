@@ -23,9 +23,9 @@ APFramework.State = {
 -- Configuration
 APFramework.Config = {
     debug = true,
-    capability_file = "APCapabilities.json",
+    capability_file = "ue4ss\\Mods\\APFramework\\APCapabilities.json",
     seed_file = nil, -- Set by player when loading seed
-    save_state_file = "APSaveState.json",
+    save_state_file = "ue4ss\\Mods\\APFramework\\APSaveState.json",
     framework_dir = "APFramework"
 }
 
@@ -245,12 +245,7 @@ end
 ---@return boolean success
 function APFramework:ConnectToServer(host, port, slot, password)
     if not APClient then
-        self:LogError("APClient not available yet (Phase 2)")
-        return false
-    end
-
-    if not self.State.seed_loaded then
-        self:LogError("Seed not loaded yet")
+        self:LogError("APClient module not loaded")
         return false
     end
 
@@ -263,9 +258,17 @@ function APFramework:ConnectToServer(host, port, slot, password)
         return false
     end
 
+    -- Get seed name if available
+    local game_name = "Palworld"
+    if self.State.seed_loaded then
+        local metadata = StateManager:GetSeedMetadata()
+        if metadata and metadata.seed_name then
+            game_name = metadata.seed_name
+        end
+    end
+
     -- Authenticate
-    local seed_name = StateManager:GetSeedMetadata().seed_name
-    success = APClient:Authenticate(slot, password, seed_name)
+    success = APClient:Authenticate(slot, password, game_name)
     if not success then
         self:LogError("Failed to authenticate with AP server")
         return false

@@ -55,24 +55,39 @@ function APClient:Initialize(host, port)
     self.connection.host = host
     self.connection.port = port
 
+    -- Update package.cpath to find lua-apclientpp.dll
+    -- Working directory is Binaries/Win64
+    local lib_dir = "ue4ss/Mods/APFramework/Scripts/lib/"
+    package.cpath = package.cpath .. ";" .. lib_dir .. "?.dll"
+
+    print("[APClient] DEBUG: package.cpath = " .. package.cpath)
+
     -- Try to load lua-apclientpp
-    local success, apclientpp = pcall(require, "apclientpp")
+    local success, apclientpp = pcall(require, "lua-apclientpp")
 
     if not success then
         print("[APClient] Warning: lua-apclientpp not available")
+        print("[APClient] Error: " .. tostring(apclientpp))
         print("[APClient] Running in stub mode (no actual server connection)")
         self.initialized = true
         return true
     end
 
     -- Create client instance
-    self.client = apclientpp.new()
+    -- lua-apclientpp.new() requires: uuid, game_name, server
+    local uuid = self.connection.uuid or ""
+    local game_name = self.connection.game or "Palworld"
+    local server = string.format("%s:%d", host, port)
+
+    print(string.format("[APClient] Creating client (game=%s, server=%s)", game_name, server))
+    self.client = apclientpp.new(uuid, game_name, server)
 
     if not self.client then
         print("[APClient ERROR] Failed to create AP client instance")
         return false
     end
 
+    print("[APClient] Successfully loaded lua-apclientpp!")
     self.initialized = true
     print(string.format("[APClient] Initialized for %s:%d", host, port))
 
@@ -109,32 +124,28 @@ function APClient:Authenticate(slot_name, password, game_name)
         return true
     end
 
-    -- Real connection with lua-apclientpp
-    local success, err = pcall(function()
-        self.client:Connect({
-            hostname = self.connection.host,
-            port = self.connection.port,
-            game = self.connection.game,
-            name = slot_name,
-            password = password,
-            uuid = self.connection.uuid,
-            items_handling = 7, -- All items (binary 0b111 = 7)
-            tags = {"AP", "Palworld"}
-        })
-    end)
-
-    if not success then
-        print(string.format("[APClient ERROR] Connection failed: %s", tostring(err)))
-        return false
-    end
-
-    self.connected = true
-    self.authenticated = true
-
-    -- Set up event handlers
+    -- Set up event handlers (including room_info handler that calls ConnectSlot)
     self:SetupEventHandlers()
 
-    print(string.format("[APClient] Connected as '%s'", slot_name))
+    print("[APClient] Starting connection process...")
+    print("[APClient] Polling to establish connection...")
+
+    -- Poll to process network events and trigger handlers
+    -- The room_info handler will call ConnectSlot when ready
+    for i = 1, 100 do
+        self:Poll()
+        if i % 20 == 0 then
+            local state = self.client:get_state()
+            print(string.format("[APClient] Poll iteration %d (state=%d, connected=%s, authenticated=%s)",
+                i, state, tostring(self.connected), tostring(self.authenticated)))
+        end
+    end
+
+    print("[APClient] Initial polling complete")
+    local final_state = self.client:get_state()
+    print(string.format("[APClient] Final state: %d (connected=%s, authenticated=%s)",
+        final_state, tostring(self.connected), tostring(self.authenticated)))
+    print("[APClient] Note: Continuous polling needed for real-time events")
 
     return true
 end
@@ -145,19 +156,35 @@ function APClient:SetupEventHandlers()
         return
     end
 
-    -- Connected event
-    self.client:SetCallback("Connected", function()
-        print("[APClient] Connected to server")
-        self.connected = true
+    print("[APClient] Setting up event handlers...")
 
-        if self.callbacks.onConnected then
-            self.callbacks.onConnected()
-        end
+    -- Socket connected event
+    self.client:set_socket_connected_handler(function()
+        print("[APClient] Socket connected to server")
+        self.connected = true
     end)
 
-    -- Disconnected event
-    self.client:SetCallback("Disconnected", function()
-        print("[APClient] Disconnected from server")
+    -- Room info handler - called when connected, triggers authentication
+    self.client:set_room_info_handler(function()
+        print("[APClient] Received room info, authenticating...")
+
+        local items_handling = 7  -- 0b111 = receive all items
+        local tags = {"Lua-APClientPP", "Palworld"}
+        local client_version = {0, 5, 0}
+
+        print(string.format("[APClient] Calling ConnectSlot (slot=%s)", self.connection.slot_name))
+        self.client:ConnectSlot(
+            self.connection.slot_name,
+            self.connection.password or "",
+            items_handling,
+            tags,
+            client_version
+        )
+    end)
+
+    -- Socket disconnected event
+    self.client:set_socket_disconnected_handler(function()
+        print("[APClient] Socket disconnected from server")
         self.connected = false
         self.authenticated = false
 
@@ -166,39 +193,55 @@ function APClient:SetupEventHandlers()
         end
     end)
 
+    -- Socket error event
+    self.client:set_socket_error_handler(function(error_msg)
+        print(string.format("[APClient] Socket error: %s", tostring(error_msg)))
+    end)
+
+    -- Slot connected event (authenticated successfully)
+    self.client:set_slot_connected_handler(function(slot_data)
+        print("[APClient] Slot connected! Authenticated successfully")
+        self.authenticated = true
+
+        if self.callbacks.onConnected then
+            self.callbacks.onConnected()
+        end
+    end)
+
+    -- Slot refused event (authentication failed)
+    self.client:set_slot_refused_handler(function(reasons)
+        print(string.format("[APClient] Slot refused: %s", tostring(reasons)))
+        self.authenticated = false
+    end)
+
+    -- Items received event
+    self.client:set_items_received_handler(function(items)
+        for _, item_data in ipairs(items) do
+            print(string.format("[APClient] Item received: %s", tostring(item_data.item)))
+
+            if self.callbacks.onItemReceived then
+                self.callbacks.onItemReceived(item_data)
+            end
+        end
+    end)
+
     -- Location checked event
-    self.client:SetCallback("LocationChecked", function(location_id)
-        print(string.format("[APClient] Location checked: %d", location_id))
+    self.client:set_location_checked_handler(function(locations)
+        for _, location_id in ipairs(locations) do
+            print(string.format("[APClient] Location checked: %d", location_id))
 
-        if self.callbacks.onLocationChecked then
-            self.callbacks.onLocationChecked(location_id)
+            if self.callbacks.onLocationChecked then
+                self.callbacks.onLocationChecked(location_id)
+            end
         end
     end)
 
-    -- Item received event
-    self.client:SetCallback("ItemReceived", function(item_index, item_id, item_name, player_name)
-        local item_data = {
-            index = item_index,
-            item_id = item_id,
-            item_name = item_name,
-            player_name = player_name
-        }
-
-        print(string.format("[APClient] Item received: %s from %s", item_name, player_name))
-
-        if self.callbacks.onItemReceived then
-            self.callbacks.onItemReceived(item_data)
-        end
+    -- Print handler for server messages
+    self.client:set_print_handler(function(message)
+        print(string.format("[AP Server] %s", message))
     end)
 
-    -- Goal complete event
-    self.client:SetCallback("GoalComplete", function()
-        print("[APClient] Goal completed!")
-
-        if self.callbacks.onGoalComplete then
-            self.callbacks.onGoalComplete()
-        end
-    end)
+    print("[APClient] Event handlers registered")
 end
 
 ---Check a location (send to server)
@@ -291,7 +334,7 @@ function APClient:Poll()
     end
 
     local success, err = pcall(function()
-        self.client:Poll()
+        self.client:poll()
     end)
 
     if not success then

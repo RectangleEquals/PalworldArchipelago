@@ -52,6 +52,32 @@ if success then
         local stats = ModRegistry:GetStatistics()
         print(string.format("[APFramework] Total: %d mods, %d locations, %d items",
               stats.total_mods, stats.location_count, stats.item_count))
+
+        -- Connect to AP server if mods have connection info
+        local mods = ModRegistry:GetMods()
+        for _, mod in ipairs(mods) do
+            if mod.ap_connection then
+                print(string.format("[APFramework] Found AP connection info: %s:%d",
+                    mod.ap_connection.server, mod.ap_connection.port))
+                print(string.format("[APFramework] Slot: %s", mod.ap_connection.slot_name))
+
+                -- Connect using APClient
+                local connected = APFrameworkCore:ConnectToServer(
+                    mod.ap_connection.server,
+                    mod.ap_connection.port,
+                    mod.ap_connection.slot_name,
+                    mod.ap_connection.password
+                )
+
+                if connected then
+                    print("[APFramework] Successfully connected to AP server")
+                else
+                    print("[APFramework] Warning: Failed to connect to AP server")
+                end
+
+                break -- Only connect once
+            end
+        end
     else
         print("[APFramework] Warning: Failed to generate capability manifest")
     end
@@ -62,9 +88,6 @@ else
 end
 
 print("=== APFramework Loading Complete ===")
-
--- Export to global scope for other mods to use
-_G.APFramework = APFrameworkCore
 
 -- Return the framework for UE4SS
 return APFrameworkCore
