@@ -127,7 +127,7 @@ function APFramework:LoadCoreModules()
 
     -- APClient is optional for now (will be implemented in Phase 2)
     APClient = safe_require("APClient")
-    -- Don't fail if APClient isn't implemented yet
+    if not APClient then return false end
 
     self:Log("Core modules loaded successfully")
     return true

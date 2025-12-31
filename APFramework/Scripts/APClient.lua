@@ -74,13 +74,12 @@ function APClient:Initialize(host, port)
     end
 
     -- Create client instance
-    -- lua-apclientpp.new() requires: uuid, game_name, server
     local uuid = self.connection.uuid or ""
     local game_name = self.connection.game or "Palworld"
     local server = string.format("%s:%d", host, port)
 
     print(string.format("[APClient] Creating client (game=%s, server=%s)", game_name, server))
-    self.client = apclientpp.new(uuid, game_name, server)
+    self.client = apclientpp(uuid, game_name, server)
 
     if not self.client then
         print("[APClient ERROR] Failed to create AP client instance")
@@ -132,12 +131,15 @@ function APClient:Authenticate(slot_name, password, game_name)
 
     -- Poll to process network events and trigger handlers
     -- The room_info handler will call ConnectSlot when ready
-    for i = 1, 100 do
+    local t0 = os.clock()
+    local previous_state = -1
+    while os.clock() - t0 < 10 do
         self:Poll()
-        if i % 20 == 0 then
-            local state = self.client:get_state()
-            print(string.format("[APClient] Poll iteration %d (state=%d, connected=%s, authenticated=%s)",
-                i, state, tostring(self.connected), tostring(self.authenticated)))
+        local state = self.client:get_state()
+        if state ~= previous_state then
+            previous_state = state
+            print(string.format("[APClient] Poll iteration (state=%d, connected=%s, authenticated=%s)",
+                state, tostring(self.connected), tostring(self.authenticated)))
         end
     end
 
