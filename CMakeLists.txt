@@ -23,15 +23,21 @@ add_subdirectory(third_party/apclientpp)
 
 # Add subdirectories
 add_subdirectory(src/framework_core)
+add_subdirectory(src/client_lib)
 
 # Installation rules
-install(TARGETS APFrameworkCore
+install(TARGETS APFrameworkCore APClientLib
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
 
 install(DIRECTORY src/framework_core/include/
+    DESTINATION include
+    FILES_MATCHING PATTERN "*.h"
+)
+
+install(DIRECTORY src/client_lib/include/
     DESTINATION include
     FILES_MATCHING PATTERN "*.h"
 )
