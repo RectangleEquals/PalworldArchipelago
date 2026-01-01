@@ -751,33 +751,42 @@ function APFramework:Initialize()
     print("[APFramework] Starting IPC server...")
     core_dll.framework_core_start_ipc(core_handle)
 
-    -- Auto-discover mods
+    -- Auto-discover mods (scans for ap_config.json files)
     print("[APFramework] Discovering AP-enabled mods...")
     self:DiscoverMods()
 
-    -- Connect to AP server
-    print("[APFramework] Connecting to AP server...")
+    -- Wait for mod registrations (registration phase)
+    print("[APFramework] Waiting for mod registrations...")
+    -- Note: Registration happens asynchronously via IPC
+    -- Framework will generate APCapabilities.json once all discovered mods register
+
+    -- Optional: Auto-connect if configured
     local config = self:LoadConfig()
-    if config and config.ap_connection and config.ap_connection.enabled then
-        local success = core_dll.framework_core_connect_ap(
-            core_handle,
-            config.ap_connection.server,
-            config.ap_connection.port,
-            config.ap_connection.slot_name,
-            config.ap_connection.password or ""
-        )
+    if config and config.ap_connection and config.ap_connection.autoconnect then
+        print("[APFramework] Auto-connect enabled, will connect after registration")
 
-        if success then
-            print("[APFramework] Connected to AP server successfully")
+        -- Register callback for registration_complete event
+        self:OnRegistrationComplete(function()
+            print("[APFramework] Registration complete, initiating auto-connect...")
 
-            -- Start polling thread
-            core_dll.framework_core_start_polling(core_handle)
-            print("[APFramework] Background polling started")
-        else
-            print("[APFramework] Warning: Failed to connect to AP server")
-        end
+            local success = core_dll.framework_core_connect_ap(
+                core_handle,
+                config.ap_connection.server,
+                config.ap_connection.port,
+                config.ap_connection.slot_name,
+                config.ap_connection.password or ""
+            )
+
+            if success then
+                print("[APFramework] Connected to AP server successfully")
+                core_dll.framework_core_start_polling(core_handle)
+                print("[APFramework] Background polling started")
+            else
+                print("[APFramework] Warning: Failed to connect to AP server")
+            end
+        end)
     else
-        print("[APFramework] AP connection disabled in config")
+        print("[APFramework] Auto-connect disabled - waiting for connection request")
     end
 
     return true

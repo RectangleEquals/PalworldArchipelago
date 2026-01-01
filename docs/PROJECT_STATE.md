@@ -143,11 +143,13 @@ This branch is in **design phase only**. No code has been written yet.
 ### Key Features
 
 **APFrameworkCore.dll** (C++ Library):
-- lua-apclientpp integration
+- apclientpp integration (C++ library, not lua-apclientpp)
 - Background polling thread (no blocking)
 - Named Pipes IPC server
 - Per-mod message queues
 - Message routing logic
+- Auto-discovery and registration phase management
+- APCapabilities.json generation
 
 **Client Libraries**:
 - **ap_client.lua**: Pure Lua wrapper for Lua mods
@@ -160,8 +162,8 @@ This branch is in **design phase only**. No code has been written yet.
 - Non-blocking reads/writes
 
 **Message Types**:
-- `register`, `location_check`, `status_update`, `poll` (mod → framework)
-- `item_received`, `location_checked`, `connection_status`, `framework_ready` (framework → mod)
+- Mod → Framework: `register`, `location_check`, `status_update`, `poll`, `connection_request`
+- Framework → Mod: `item_received`, `location_checked`, `connection_status`, `registration_complete`
 
 ### Threading Model
 

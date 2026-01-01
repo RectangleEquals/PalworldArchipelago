@@ -101,7 +101,10 @@ APFramework/
 ### 2. APClientLib (Mod Client Library)
 
 **Type**: C++ Library (for C++ mods)
-**Location**: Distributed with framework, placed in mod's `dlls/` folder
+**Location**: Distributed with framework
+- **C++ mods**: Placed in mod's `dlls/` folder
+- **Lua mods**: Placed in mod's `Scripts/lib/` folder (alongside Lua wrapper)
+- **Combo mods**: Choose either C++ OR Lua interface, not both
 
 **Components**:
 ```
@@ -149,23 +152,35 @@ APClientLib.dll
 ```
 1. UE4SS starts loading mods (order from mods.txt)
    ↓
-2. APFramework loads FIRST (enforced by load order)
+2. APFramework loads (must be BEFORE any AP-enabled mods, NOT necessarily first)
    ├─ Loads APFrameworkCore.dll via FFI
    ├─ Starts IPC server (Named Pipes)
    ├─ Scans for ap_config.json files (auto-discovery)
-   └─ Connects to AP server
+   └─ Waits for mod registrations (does NOT auto-connect yet)
    ↓
-3. Other mods load in normal UE4SS order
-   ↓
-4. AP-enabled mods initialize
+3. AP-enabled mods load in normal UE4SS order
    ├─ Load client library (ap_client.lua or APClientLib.dll)
    ├─ Connect to framework via IPC
-   ├─ Register event handlers
-   └─ Start polling message queue
+   ├─ Send registration message with capabilities
+   └─ Wait for framework "registration_complete" signal
    ↓
-5. Framework sends "ready" message to all connected mods
+4. Framework completes registration phase
+   ├─ All discovered mods have registered (promises fulfilled)
+   ├─ Generate APCapabilities.json from registered mods
+   ├─ Send "registration_complete" to all mods
+   └─ Ready to accept connection requests (NOT auto-connecting)
    ↓
-6. Normal gameplay begins
+5. AP Connection (triggered by request, not automatic)
+   ├─ Option A: Lua wrapper detects "autoconnect" config → requests connection
+   ├─ Option B: AP mod (e.g., ArchipelagoMenu) → requests connection via IPC
+   ├─ Framework connects to AP server
+   ├─ Starts background polling thread
+   └─ Sends "connection_status" to all mods
+   ↓
+6. Runtime operation
+   ├─ Mods poll for messages in their update loops
+   ├─ Auto-reconnect on disconnect (graceful recovery)
+   └─ Auto-sync maintains state consistency
 ```
 
 ### 2. Runtime Message Flow
@@ -330,7 +345,18 @@ All IPC messages use JSON with this structure:
 }
 ```
 
-**4. Framework Ready**
+**4. Registration Complete**
+```json
+{
+  "type": "registration_complete",
+  "data": {
+    "total_mods": 3,
+    "capabilities_generated": true
+  }
+}
+```
+
+**5. Framework Ready** (deprecated in favor of registration_complete)
 ```json
 {
   "type": "framework_ready",
@@ -340,7 +366,21 @@ All IPC messages use JSON with this structure:
 }
 ```
 
-**5. Error**
+**6. Connection Request** (Mod → Framework)
+```json
+{
+  "type": "connection_request",
+  "mod_id": "mymod",
+  "data": {
+    "server": "archipelago.gg",
+    "port": 38281,
+    "slot": "Player1",
+    "password": "optional"
+  }
+}
+```
+
+**7. Error**
 ```json
 {
   "type": "error",
@@ -501,6 +541,53 @@ end
 
 ---
 
+## Framework Self-Registration
+
+### Logging and Monitoring
+
+The **APFramework Lua wrapper** can optionally register itself as a special, high-priority AP mod to receive and log all IPC activity.
+
+**Benefits**:
+- All IPC messages logged to UE4SS console
+- Debug visibility into framework operation
+- C++ core pipes log messages to Lua wrapper
+- No separate logging infrastructure needed
+
+**Implementation**:
+
+```lua
+-- APFramework/Scripts/APFramework.lua
+local APClient = require("lib.ap_client")
+
+-- Framework registers itself as special mod
+local framework_client = APClient.new("_APFramework_Internal")
+framework_client:Connect()
+
+-- Register with high priority flag
+framework_client:SendMessage({
+    type = "register",
+    mod_id = "_APFramework_Internal",
+    data = {
+        priority = "high",
+        logging_only = true,
+        capabilities = {}
+    }
+})
+
+-- Receive all IPC activity for logging
+framework_client:OnMessage(function(msg)
+    print(string.format("[APFramework IPC] %s: %s", msg.type, json.encode(msg.data)))
+end)
+```
+
+**C++ Core Recognition**:
+- Recognizes `_APFramework_Internal` as framework mod
+- Pipes internal log messages to this mod's queue
+- Framework mod receives copy of all IPC messages
+- Special priority ensures logs are always delivered
+
+---
+
 ## Threading Model
 
 ### Framework Threading
@@ -515,7 +602,7 @@ end
    - Writes responses back to mods
 
 2. **Polling Thread** (AP Client):
-   - Continuously polls lua-apclientpp (every 16ms)
+   - Continuously polls apclientpp (every 16ms)
    - Processes incoming AP messages
    - Routes messages to mod-specific queues
    - Thread-safe queue operations
@@ -614,9 +701,10 @@ Not a goal for IPC branch. This is a clean-slate redesign. Users can stick with 
 ### Dependencies
 
 - UE4SS (latest version)
-- lua-apclientpp v0.6.4+
+- apclientpp (C++ library for Archipelago protocol)
 - C++17 or later (for framework core)
 - LuaJIT FFI (for framework Lua mod)
+- nlohmann/json (C++ JSON library)
 
 ### Performance Considerations
 
