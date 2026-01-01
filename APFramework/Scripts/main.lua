@@ -30,6 +30,9 @@ print("[APFramework] - APFramework core loaded")
 
 print("[APFramework] All modules loaded successfully")
 
+local poll_interval_sec = 0.05
+local processing = false
+
 -- Initialize the framework
 print("[APFramework] Initializing framework...")
 local success = APFrameworkCore:Initialize()
@@ -51,7 +54,7 @@ if success then
         -- Print summary
         local stats = ModRegistry:GetStatistics()
         print(string.format("[APFramework] Total: %d mods, %d locations, %d items",
-              stats.total_mods, stats.location_count, stats.item_count))
+            stats.total_mods, stats.location_count, stats.item_count))
 
         -- Connect to AP server if configured
         local connection_config = ConfigManager:GetConnectionConfig()
@@ -75,40 +78,11 @@ if success then
                 -- Start continuous polling loop in main thread (blocking)
                 local framework_config = ConfigManager:GetConfig().framework
                 local poll_interval_ms = (framework_config and framework_config.poll_interval_ms) or 16
-                local poll_interval_sec = poll_interval_ms / 1000.0
+                poll_interval_sec = poll_interval_ms / 1000.0
                 print(string.format("[APFramework] Starting continuous polling (interval: %dms)", poll_interval_ms))
 
                 -- Blocking polling loop in main Lua state
-                local processing = true
-                local start_time = os.clock()
-
-                while processing do
-                    local current_time = os.clock()
-                    local elapsed_time = current_time - start_time
-
-                    if elapsed_time >= poll_interval_sec then
-                        -- Poll the client
-                        if APFrameworkCore and APFrameworkCore.GetAPClient then
-                            local apclient = APFrameworkCore:GetAPClient()
-                            if apclient then
-                                local success, err = pcall(function()
-                                    apclient:Poll()
-                                end)
-                                if not success then
-                                    print("[APFramework] Poll error: " .. tostring(err))
-                                    processing = false -- Stop on error
-                                end
-                            end
-                        end
-
-                        -- Execute frame callbacks for submods
-                        if EventBus then
-                            EventBus:ExecuteFrameCallbacks()
-                        end
-
-                        start_time = current_time -- Reset timer
-                    end
-                end
+                processing = true
 
                 print("[APFramework] Continuous polling started")
             else
@@ -127,6 +101,40 @@ else
 end
 
 print("=== APFramework Loading Complete ===")
+
+print("[APFramework] Setting up poll loop")
+local start_time = os.clock()
+RegisterCustomEvent("Tick", function(deltaTime)
+    if processing then
+        local current_time = os.clock()
+        local elapsed_time = current_time - start_time
+
+        if elapsed_time >= poll_interval_sec then
+            -- Poll the client
+            if APFrameworkCore and APFrameworkCore.GetAPClient then
+                local apclient = APFrameworkCore:GetAPClient()
+                if apclient then
+                    local success, err = pcall(function()
+                        apclient:Poll()
+                    end)
+                    if not success then
+                        print("[APFramework] Poll error: " .. tostring(err))
+                        processing = false -- Stop on error
+                    end
+                end
+            end
+
+            -- Execute frame callbacks for submods
+            if EventBus then
+                EventBus:ExecuteFrameCallbacks()
+            end
+
+            start_time = current_time -- Reset timer
+            --print("Tick " .. current_time .. "\n") -- Print if you want to verify it is running
+        end
+    end
+end)
+print("[APFramework] Loop running every tick")
 
 -- Return the framework for UE4SS
 return APFrameworkCore
