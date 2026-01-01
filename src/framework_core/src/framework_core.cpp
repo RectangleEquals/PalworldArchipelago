@@ -14,7 +14,7 @@ FrameworkCore::FrameworkCore(const std::string& pipe_name)
     mod_registry_ = std::make_unique<ModRegistry>();
 
     // Create AP client with default UUID and game name
-    ap_client_ = std::make_unique<APClientWrapper>("APFramework", "Generic");
+    ap_client_ = std::make_unique<APClientWrapper>("APFramework", "Palworld");
 
     // Create IPC server
     ipc_server_ = std::make_unique<IPCServer>(pipe_name);
@@ -78,7 +78,7 @@ bool FrameworkCore::all_mods_registered() const {
 }
 
 std::string FrameworkCore::generate_capabilities() const {
-    return mod_registry_->generate_capabilities_json();
+    return capabilities_generator_->generate_json();
 }
 
 // Polling Thread Management
@@ -96,11 +96,11 @@ bool FrameworkCore::is_polling() const {
 
 // Configuration Management
 bool FrameworkCore::load_config(const std::string& config_path) {
-    return config_manager_->load_from_file(config_path);
+    return config_manager_->load_config(config_path);
 }
 
 bool FrameworkCore::save_config(const std::string& config_path) {
-    return config_manager_->save_to_file(config_path);
+    return config_manager_->save_config(config_path);
 }
 
 ConfigManager& FrameworkCore::get_config_manager() {
@@ -111,27 +111,39 @@ ConfigManager& FrameworkCore::get_config_manager() {
 void FrameworkCore::handle_ipc_message(const IPCMessage& msg) {
     if (msg.type == "register") {
         handle_mod_registration(msg.mod_id, msg.data_json);
-    } else if (msg.type == "location_check") {
+    }
+    else if (msg.type == "location_check") {
         handle_location_check(msg.mod_id, msg.data_json);
-    } else if (msg.type == "connect") {
+    }
+    else if (msg.type == "connect") {
         handle_connection_request(msg.mod_id, msg.data_json);
-    } else if (msg.type == "status_update") {
+    }
+    else if (msg.type == "status_update") {
         handle_status_update(msg.mod_id, msg.data_json);
     }
 }
 
 void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std::string& data_json) {
     try {
-        json data = json::parse(data_json);
+        // Register mod in capabilities generator (which parses the full JSON)
+        capabilities_generator_->register_mod_from_config(mod_id, data_json);
 
+        // Parse for ModRegistry (which needs simpler data)
+        json data = json::parse(data_json);
         ModCapabilities caps;
         caps.mod_id = mod_id;
 
         // Parse items array
         if (data.contains("items") && data["items"].is_array()) {
             for (const auto& item : data["items"]) {
+                int64_t item_id = 0;
                 if (item.is_number_integer()) {
-                    caps.items.push_back(item.get<int64_t>());
+                    item_id = item.get<int64_t>();
+                } else if (item.is_object() && item.contains("id")) {
+                    item_id = item["id"].get<int64_t>();
+                }
+                if (item_id != 0) {
+                    caps.items.push_back(item_id);
                 }
             }
         }
@@ -139,8 +151,14 @@ void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std
         // Parse locations array
         if (data.contains("locations") && data["locations"].is_array()) {
             for (const auto& location : data["locations"]) {
+                int64_t location_id = 0;
                 if (location.is_number_integer()) {
-                    caps.locations.push_back(location.get<int64_t>());
+                    location_id = location.get<int64_t>();
+                } else if (location.is_object() && location.contains("id")) {
+                    location_id = location["id"].get<int64_t>();
+                }
+                if (location_id != 0) {
+                    caps.locations.push_back(location_id);
                 }
             }
         }
@@ -150,13 +168,11 @@ void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std
             for (const auto& region : data["regions"]) {
                 if (region.is_string()) {
                     caps.regions.push_back(region.get<std::string>());
+                } else if (region.is_object() && region.contains("name")) {
+                    caps.regions.push_back(region["name"].get<std::string>());
                 }
             }
         }
-
-        // Parse optional fields
-        caps.logging_only = data.value("logging_only", false);
-        caps.priority = data.value("priority", "normal");
 
         // Register mod in registry
         mod_registry_->register_mod(mod_id, caps);
@@ -167,12 +183,16 @@ void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std
         // Update message router with this mod's capabilities
         message_router_->register_mod_capabilities(mod_id, caps.items, caps.locations);
 
-        // Add to capabilities generator
-        capabilities_generator_->add_mod_data(mod_id, data_json);
-
         // Check if all mods have registered
         if (all_mods_registered()) {
             notify_registration_complete();
+
+            // If autoconnect enabled, connect now
+            auto profile = config_manager_->get_active_profile();
+            if (profile.autoconnect) {
+                connect_ap(profile.server, profile.port,
+                          profile.slot_name, profile.password);
+            }
         }
 
     } catch (const std::exception&) {
@@ -227,6 +247,12 @@ void FrameworkCore::handle_status_update(const std::string& mod_id, const std::s
 }
 
 void FrameworkCore::notify_registration_complete() {
+    // Generate APCapabilities.json
+    std::string caps_json = capabilities_generator_->generate_json();
+
+    // TODO: Save to file (will need path configuration)
+    // For now, just generate it - the Lua wrapper can request it
+
     // Send registration_complete message to all mods
     IPCMessage msg;
     msg.type = "registration_complete";
@@ -234,6 +260,7 @@ void FrameworkCore::notify_registration_complete() {
 
     json data;
     data["registered_count"] = mod_registry_->get_all_registered_mods().size();
+    data["capabilities_ready"] = true;
     msg.data_json = data.dump();
 
     ipc_server_->send_to_all_mods(msg);

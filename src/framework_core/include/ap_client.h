@@ -6,12 +6,10 @@
 #include <mutex>
 #include <cstdint>
 
-// Forward declare apclientpp types to avoid exposing the header
-namespace APClient {
-    class APClient;
-}
-
 namespace APFramework {
+
+// Opaque pointer to apclientpp implementation
+struct APClientImpl;
 
 /**
  * @brief Message structure for AP events
@@ -71,7 +69,7 @@ public:
     void status_update(int status);
 
 private:
-    std::unique_ptr<APClient::APClient> impl_;
+    std::unique_ptr<APClientImpl> impl_;
     std::vector<APMessage> pending_messages_;
     mutable std::mutex messages_mutex_;
 

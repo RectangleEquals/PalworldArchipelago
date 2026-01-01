@@ -7,8 +7,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Windows definitions for asio and apclientpp
 add_compile_definitions(
     ASIO_STANDALONE                      # Use standalone asio (not boost::asio)
+    WSWRAP_NO_SSL                        # Disable SSL in wswrap (no OpenSSL dependency)
+    WSWRAP_NO_COMPRESSION                # Disable compression in wswrap (no zlib dependency)
     _WEBSOCKETPP_CPP11_RANDOM_DEVICE_    # Use C++11 random device
     _WEBSOCKETPP_CPP11_THREAD_           # Use C++11 threading
+    _WEBSOCKETPP_CPP11_TYPE_TRAITS_      # Use C++11 type traits
+    _WEBSOCKETPP_CPP11_FUNCTIONAL_       # Use C++11 functional
+    _WEBSOCKETPP_CPP11_SYSTEM_ERROR_     # Use C++11 system_error
+    _WEBSOCKETPP_CPP11_MEMORY_           # Use C++11 smart pointers
+    _WEBSOCKETPP_CPP11_CHRONO_           # Use C++11 chrono
     _WIN32_WINNT=0x0601                  # Windows 7+ for networking APIs
     WIN32_LEAN_AND_MEAN                  # Reduce Windows.h bloat
     ASIO_NO_WIN32_LEAN_AND_MEAN          # But allow asio to include what it needs

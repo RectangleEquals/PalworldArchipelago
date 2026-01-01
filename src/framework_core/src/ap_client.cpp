@@ -6,20 +6,43 @@ namespace APFramework {
 
 using json = nlohmann::json;
 
+// Define the opaque implementation structure
+// APClient is from the global namespace (apclientpp library)
+struct APClientImpl {
+    std::unique_ptr<::APClient> client;
+    std::string uuid;
+    std::string game;
+    std::string current_uri;
+
+    APClientImpl(const std::string& uuid_, const std::string& game_)
+        : uuid(uuid_), game(game_), current_uri("localhost:38281") {
+        client = std::make_unique<::APClient>(uuid, game, current_uri);
+    }
+
+    void reconnect(const std::string& server, int port) {
+        std::string new_uri = server + ":" + std::to_string(port);
+        if (new_uri != current_uri) {
+            // Need to recreate the client with new URI
+            current_uri = new_uri;
+            client = std::make_unique<::APClient>(uuid, game, current_uri);
+        }
+    }
+};
+
 APClientWrapper::APClientWrapper(const std::string& uuid, const std::string& game) {
-    impl_ = std::make_unique<APClient::APClient>(uuid, game, "");
+    impl_ = std::make_unique<APClientImpl>(uuid, game);
 
     // Register callbacks
-    impl_->set_slot_connected_handler([this](const json& data) {
+    impl_->client->set_slot_connected_handler([this](const json& data) {
         on_slot_connected(data.dump());
     });
 
-    impl_->set_slot_refused_handler([this](const std::vector<std::string>& reasons) {
+    impl_->client->set_slot_refused_handler([this](const std::list<std::string>& reasons) {
         json reason_json = reasons;
         on_slot_refused(reason_json.dump());
     });
 
-    impl_->set_items_received_handler([this](const std::vector<APClient::NetworkItem>& items) {
+    impl_->client->set_items_received_handler([this](const std::list<APClient::NetworkItem>& items) {
         json items_json;
         for (const auto& item : items) {
             json item_obj;
@@ -32,7 +55,7 @@ APClientWrapper::APClientWrapper(const std::string& uuid, const std::string& gam
         on_items_received(items_json.dump());
     });
 
-    impl_->set_location_checked_handler([this](const std::vector<int64_t>& locations) {
+    impl_->client->set_location_checked_handler([this](const std::list<int64_t>& locations) {
         json locations_json = locations;
         on_location_checked(locations_json.dump());
     });
@@ -45,8 +68,12 @@ APClientWrapper::~APClientWrapper() {
 bool APClientWrapper::connect(const std::string& server, int port,
                               const std::string& slot_name, const std::string& password) {
     try {
-        APClient::RenderFormat render = APClient::RenderFormat::TEXT;
-        impl_->ConnectSlot(server, slot_name, password, port, false, 0, {}, {}, render);
+        // Reconnect with new server if needed
+        impl_->reconnect(server, port);
+
+        // Connect to the slot
+        // items_handling: 0 = no item link, 1 = send, 2 = receive, 7 = all
+        impl_->client->ConnectSlot(slot_name, password, 7);  // 7 = full item link
         return true;
     } catch (const std::exception&) {
         return false;
@@ -65,7 +92,7 @@ bool APClientWrapper::is_connected() const {
         return false;
     }
 
-    APClient::State state = impl_->get_state();
+    APClient::State state = impl_->client->get_state();
     return state == APClient::State::SLOT_CONNECTED;
 }
 
@@ -74,12 +101,12 @@ int APClientWrapper::get_state() const {
         return static_cast<int>(APClient::State::DISCONNECTED);
     }
 
-    return static_cast<int>(impl_->get_state());
+    return static_cast<int>(impl_->client->get_state());
 }
 
 void APClientWrapper::poll() {
     if (impl_) {
-        impl_->poll();
+        impl_->client->poll();
     }
 }
 
@@ -94,15 +121,15 @@ std::vector<APMessage> APClientWrapper::get_messages() {
 
 void APClientWrapper::check_location(int64_t location_id) {
     if (impl_) {
-        std::vector<int64_t> locations = {location_id};
-        impl_->LocationChecks(locations);
+        std::list<int64_t> locations = {location_id};
+        impl_->client->LocationChecks(locations);
     }
 }
 
 void APClientWrapper::status_update(int status) {
     if (impl_) {
         APClient::ClientStatus client_status = static_cast<APClient::ClientStatus>(status);
-        impl_->StatusUpdate(client_status);
+        impl_->client->StatusUpdate(client_status);
     }
 }
 
