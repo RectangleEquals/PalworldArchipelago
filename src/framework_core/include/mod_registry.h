@@ -19,8 +19,6 @@ struct ModCapabilities {
     std::vector<int64_t> items;
     std::vector<int64_t> locations;
     std::vector<std::string> regions;
-    bool logging_only;          // True if mod only wants to log IPC activity
-    std::string priority;       // "high", "normal", "low" - for message routing
 };
 
 /**
