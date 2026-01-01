@@ -1,8 +1,8 @@
 # APFramework IPC Branch - Implementation Plan
 
 **Version**: 2.0.0
-**Last Updated**: December 31, 2024
-**Status**: Design Phase
+**Last Updated**: January 1, 2026
+**Status**: Implementation Phase - Phase 1 (Headers Complete)
 
 ---
 
@@ -37,9 +37,9 @@
 - Lua busted (Lua unit tests)
 
 **Dependencies**:
-- apclientpp (C++ library for Archipelago protocol)
-- nlohmann/json (C++ JSON library)
-- Windows SDK (Named Pipes API)
+- **apclientpp** (C++ library for Archipelago protocol) - NOT lua-apclientpp
+- **nlohmann/json** (C++ JSON library)
+- **Windows SDK** (Named Pipes API)
 
 ### Directory Structure
 
@@ -98,9 +98,11 @@ ipc_branch/
 
 **Goal**: Implement `APFrameworkCore.dll` - the heart of the framework
 
-### 1.1 Project Setup
+### 1.1 Project Setup ✅ COMPLETE
 
 **File**: `src/framework_core/CMakeLists.txt`
+
+**Status**: ✅ Created and configured
 
 ```cmake
 cmake_minimum_required(VERSION 3.20)
@@ -117,10 +119,13 @@ find_package(apclientpp REQUIRED)
 set(SOURCES
     src/ap_client.cpp
     src/ipc_server.cpp
-    src/message_queue.cpp
     src/message_router.cpp
     src/mod_registry.cpp
     src/polling_thread.cpp
+    src/config_manager.cpp
+    src/capabilities_generator.cpp
+    src/ffi_bindings.cpp
+    src/framework_core.cpp
     src/main.cpp
 )
 
@@ -132,6 +137,9 @@ set(HEADERS
     include/message_router.h
     include/mod_registry.h
     include/polling_thread.h
+    include/config_manager.h
+    include/capabilities_generator.h
+    include/framework_core.h
     include/ffi_bindings.h
 )
 
@@ -146,257 +154,215 @@ target_link_libraries(APFrameworkCore
 )
 ```
 
-### 1.2 Core Components
+**Changes from original plan**:
+- Added `config_manager.cpp` and `config_manager.h` for configuration/profile management
+- Added `capabilities_generator.cpp` and `capabilities_generator.h` for APCapabilities.json generation
+- Added `framework_core.cpp` and `framework_core.h` as main orchestrator
+- Removed `message_queue.cpp` (header-only template)
+- All components use `APFramework` namespace (not `apframework`)
 
-#### APClient Wrapper
+### 1.2 Core Components ✅ HEADERS COMPLETE
 
-**File**: `src/framework_core/include/ap_client.h`
+**Status**: All header files created with complete documentation and `APFramework` namespace
+
+#### 1. FrameworkCore (Main Orchestrator)
+
+**File**: `src/framework_core/include/framework_core.h` ✅
+
+**Purpose**: Central coordinator for all framework components
+
+**Key responsibilities**:
+- Owns all component instances (APClient, IPC, Router, Registry, etc.)
+- Coordinates component lifecycle
+- Handles IPC message dispatch
+- Manages mod registration flow
+- Provides FFI binding implementations
+
+#### 2. APClientWrapper
+
+**File**: `src/framework_core/include/ap_client.h` ✅
+
+**Namespace**: `APFramework` (updated from original plan)
+
+**Key changes from original plan**:
+- Renamed from `APClient` to `APClientWrapper` to avoid confusion
+- Uses `APFramework` namespace
+- Forward declares `APClient::APClient` from apclientpp to avoid header exposure
+- Thread-safe message queuing with mutex
 
 ```cpp
-#pragma once
-#include <string>
-#include <functional>
-#include <memory>
-#include <apclientpp/apclientpp.hpp>
-
-// Internal implementation details
-struct APClientImpl;
-
-struct APMessage {
-    enum Type {
-        ItemReceived,
-        LocationChecked,
-        SlotConnected,
-        Disconnected
+namespace APFramework {
+    struct APMessage {
+        enum Type {
+            ItemReceived, LocationChecked, SlotConnected,
+            Disconnected, RoomInfo, DataPackage
+        };
+        Type type;
+        int64_t item_id;
+        int64_t location_id;
+        int player_slot;
+        std::string data_json;
     };
 
-    Type type;
-    int64_t item_id;
-    int64_t location_id;
-    int player_slot;
-    std::string data_json; // Full message as JSON
-};
-
-class APClient {
-public:
-    APClient(const std::string& uuid, const std::string& game, const std::string& server);
-    ~APClient();
-
-    // Connection
-    bool connect_slot(const std::string& slot_name, const std::string& password);
-    void disconnect();
-    bool is_connected() const;
-    int get_state() const;
-
-    // Polling
-    void poll(); // Call this continuously
-    std::vector<APMessage> get_messages(); // Get pending messages
-
-    // Commands
-    void check_location(int64_t location_id);
-    void status_update(int status);
-
-private:
-    std::unique_ptr<APClientImpl> impl;
-};
-```
-
-#### IPC Server
-
-**File**: `src/framework_core/include/ipc_server.h`
-
-```cpp
-#pragma once
-#include <string>
-#include <thread>
-#include <atomic>
-#include <map>
-#include <functional>
-#include "message_queue.h"
-
-struct IPCMessage {
-    std::string type;
-    std::string mod_id;
-    std::string data_json;
-};
-
-class IPCServer {
-public:
-    IPCServer(const std::string& pipe_name);
-    ~IPCServer();
-
-    // Lifecycle
-    void start();
-    void stop();
-    bool is_running() const;
-
-    // Message handling
-    void send_to_mod(const std::string& mod_id, const IPCMessage& msg);
-    void set_message_handler(std::function<void(const IPCMessage&)> handler);
-
-    // Mod management
-    void register_mod(const std::string& mod_id);
-    void unregister_mod(const std::string& mod_id);
-
-private:
-    void server_loop();
-    void handle_client(void* pipe_handle);
-
-    std::string pipe_name_;
-    std::thread server_thread_;
-    std::atomic<bool> running_;
-    std::map<std::string, MessageQueue<IPCMessage>> mod_queues_;
-    std::function<void(const IPCMessage&)> message_handler_;
-};
-```
-
-#### Message Queue
-
-**File**: `src/framework_core/include/message_queue.h`
-
-```cpp
-#pragma once
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <optional>
-
-template<typename T>
-class MessageQueue {
-public:
-    void push(const T& message) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        queue_.push(message);
-        cond_var_.notify_one();
-    }
-
-    std::optional<T> pop(bool blocking = false) {
-        std::unique_lock<std::mutex> lock(mutex_);
-
-        if (blocking) {
-            cond_var_.wait(lock, [this]{ return !queue_.empty(); });
-        } else if (queue_.empty()) {
-            return std::nullopt;
-        }
-
-        T message = queue_.front();
-        queue_.pop();
-        return message;
-    }
-
-    size_t size() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return queue_.size();
-    }
-
-    bool empty() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return queue_.empty();
-    }
-
-private:
-    mutable std::mutex mutex_;
-    std::condition_variable cond_var_;
-    std::queue<T> queue_;
-};
-```
-
-#### Polling Thread
-
-**File**: `src/framework_core/include/polling_thread.h`
-
-```cpp
-#pragma once
-#include <thread>
-#include <atomic>
-#include <functional>
-#include "ap_client.h"
-#include "message_router.h"
-
-class PollingThread {
-public:
-    PollingThread(APClient* client, MessageRouter* router);
-    ~PollingThread();
-
-    void start();
-    void stop();
-    bool is_running() const;
-
-private:
-    void polling_loop();
-
-    APClient* ap_client_;
-    MessageRouter* router_;
-    std::thread thread_;
-    std::atomic<bool> running_;
-};
-```
-
-#### Message Router
-
-**File**: `src/framework_core/include/message_router.h`
-
-```cpp
-#pragma once
-#include <string>
-#include <map>
-#include <functional>
-#include "ap_client.h"
-#include "ipc_server.h"
-
-class MessageRouter {
-public:
-    MessageRouter(IPCServer* ipc_server);
-
-    // Route AP message to appropriate mod(s)
-    void route_ap_message(const APMessage& msg);
-
-    // Register which mod handles which items/locations
-    void register_item_handler(int64_t item_id, const std::string& mod_id);
-    void register_location_handler(int64_t location_id, const std::string& mod_id);
-
-    // Load routing table from mod capabilities
-    void load_routing_table(const std::string& capabilities_json);
-
-private:
-    IPCServer* ipc_server_;
-    std::map<int64_t, std::string> item_to_mod_;
-    std::map<int64_t, std::string> location_to_mod_;
-};
-```
-
-### 1.3 FFI Bindings
-
-**File**: `src/framework_core/include/ffi_bindings.h`
-
-```cpp
-#pragma once
-
-// C API for Lua FFI
-extern "C" {
-    // Lifecycle
-    __declspec(dllexport) void* framework_core_create(const char* pipe_name);
-    __declspec(dllexport) void framework_core_destroy(void* handle);
-
-    // IPC Server
-    __declspec(dllexport) void framework_core_start_ipc(void* handle);
-    __declspec(dllexport) void framework_core_stop_ipc(void* handle);
-
-    // AP Client
-    __declspec(dllexport) bool framework_core_connect_ap(void* handle,
-        const char* host, int port, const char* slot, const char* password);
-    __declspec(dllexport) void framework_core_disconnect_ap(void* handle);
-    __declspec(dllexport) int framework_core_get_ap_state(void* handle);
-
-    // Mod Registration
-    __declspec(dllexport) void framework_core_register_mod(void* handle,
-        const char* mod_id, const char* capabilities_json);
-
-    // Polling
-    __declspec(dllexport) void framework_core_start_polling(void* handle);
-    __declspec(dllexport) void framework_core_stop_polling(void* handle);
+    class APClientWrapper {
+        // ... (see actual header for full API)
+    };
 }
 ```
+
+#### 3. IPCServer
+
+**File**: `src/framework_core/include/ipc_server.h` ✅
+
+**Namespace**: `APFramework`
+
+**Key changes**:
+- Added `send_to_all_mods()` for broadcast messages
+- Uses Windows `HANDLE` type explicitly
+- Separate maps for pipe handles and message queues
+- Thread-safe with multiple mutexes
+
+```cpp
+namespace APFramework {
+    struct IPCMessage {
+        std::string type;
+        std::string mod_id;
+        std::string data_json;
+    };
+
+    class IPCServer {
+        // Runs on dedicated thread
+        // Manages per-mod message queues
+        // Handles bidirectional Named Pipe communication
+    };
+}
+```
+
+#### 4. MessageQueue (Header-Only Template)
+
+**File**: `src/framework_core/include/message_queue.h` ✅ COMPLETE
+
+**Namespace**: `APFramework`
+
+**Implementation status**: Fully implemented as header-only template
+
+**Key features**:
+- Thread-safe push/pop operations
+- Blocking and non-blocking pop modes
+- Condition variable for efficient blocking waits
+- Used throughout framework for inter-thread communication
+
+**Note**: This is header-only, so no .cpp file needed
+
+#### 5. PollingThread
+
+**File**: `src/framework_core/include/polling_thread.h` ✅
+
+**Namespace**: `APFramework`
+
+**Key changes**:
+- Added configurable poll interval (default 16ms for 60fps)
+- Uses `std::chrono::milliseconds` for timing
+- Getter/setter for poll interval
+
+```cpp
+namespace APFramework {
+    class PollingThread {
+        // Dedicated background thread
+        // Continuously polls APClientWrapper
+        // Routes messages via MessageRouter
+        // Configurable interval (default 16ms)
+    };
+}
+```
+
+#### 6. MessageRouter
+
+**File**: `src/framework_core/include/message_router.h` ✅
+
+**Namespace**: `APFramework`
+
+**Key features**:
+- Routes AP messages based on item/location ownership
+- Bulk registration from mod capabilities
+- Thread-safe routing with mutex
+- Query methods for debugging
+
+```cpp
+namespace APFramework {
+    class MessageRouter {
+        // Maintains item_id → mod_id mapping
+        // Maintains location_id → mod_id mapping
+        // Routes AP messages to correct mods via IPC
+    };
+}
+```
+
+#### 7. ModRegistry
+
+**File**: `src/framework_core/include/mod_registry.h` ✅
+
+**Namespace**: `APFramework`
+
+**Purpose**: Promise-based mod registration system
+
+**Key responsibilities**:
+- Discovery phase: Scan for ap_config.json files
+- Registration phase: Wait for mods to connect via IPC
+- Completion: All discovered mods registered → ready for AP connection
+- Generate APCapabilities.json from registered mods
+
+#### 8. ConfigManager (NEW)
+
+**File**: `src/framework_core/include/config_manager.h` ✅
+
+**Namespace**: `APFramework`
+
+**Purpose**: Configuration and connection profile management
+
+**Key features**:
+- Load/save config.json
+- Connection profiles (server, port, slot, password)
+- Profile switching
+- Framework settings (polling interval, logging, etc.)
+- Thread-safe access
+
+#### 9. CapabilitiesGenerator (NEW)
+
+**File**: `src/framework_core/include/capabilities_generator.h` ✅
+
+**Namespace**: `APFramework`
+
+**Purpose**: Generate APCapabilities.json from registered mod data
+
+**Key features**:
+- Collect items, locations, regions from all mods
+- Merge capabilities into single JSON
+- Validate ID ranges (no conflicts)
+- Validate region connections
+- Write to disk
+
+### 1.3 FFI Bindings ✅ HEADERS COMPLETE
+
+**File**: `src/framework_core/include/ffi_bindings.h` ✅
+
+**Key changes from original plan**:
+- Uses `FrameworkHandle` typedef instead of raw `void*`
+- Added comprehensive documentation for all functions
+- Added mod discovery functions
+- Added configuration management functions
+- Added capabilities generation functions
+- Uses opaque handle pattern to hide C++ implementation
+
+**New functions** (not in original plan):
+- `framework_core_discover_mods()` - Auto-discovery of AP-enabled mods
+- `framework_core_all_mods_registered()` - Check registration status
+- `framework_core_generate_capabilities()` - Generate APCapabilities.json
+- `framework_core_load_config()` - Load configuration
+- `framework_core_save_config()` - Save configuration
+- `framework_core_free_string()` - Memory management for returned strings
+
+**Status**: Header complete, implementation pending
 
 ### 1.4 Implementation Notes
 

@@ -1,0 +1,103 @@
+# Build directories
+build/
+bin/
+lib/
+out/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake
+!CMakeLists.txt
+Makefile
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.obj
+*.o
+
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# C++ artifacts
+*.pch
+*.pdb
+*.ilk
+*.exp
+*.iobj
+*.ipdb
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+*.egg
+
+# Lua
+luac.out
+
+# Testing
+*.log
+test_results/
+coverage/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Documentation build artifacts
+docs/_build/
+docs/.doctrees/
+
+# APFramework specific
+APCapabilities.json
+*.ap_config.json.bak
+
+# Ignore compiled client libraries in APFramework mod folder
+APFramework/Scripts/lib/*.dll
+APFramework/Scripts/lib/*.so
+
+# But keep the directory structure
+!APFramework/Scripts/lib/.gitkeep
+
+# Archipelago world build artifacts
+worlds/**/__pycache__/
+worlds/**/*.pyc
