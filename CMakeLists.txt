@@ -16,6 +16,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+# Add third-party dependencies
+# apclientpp and its dependencies are header-only
+set(APCLIENTPP_BUILD_TESTING OFF CACHE BOOL "Disable apclientpp tests" FORCE)
+add_subdirectory(third_party/apclientpp)
+
 # Add subdirectories
 add_subdirectory(src/framework_core)
 

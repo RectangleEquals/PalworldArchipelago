@@ -4,9 +4,15 @@ project(APFrameworkCore VERSION 2.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Dependencies
-find_package(nlohmann_json REQUIRED)
-find_package(apclientpp REQUIRED)
+# Windows definitions for asio and apclientpp
+add_compile_definitions(
+    ASIO_STANDALONE                      # Use standalone asio (not boost::asio)
+    _WEBSOCKETPP_CPP11_RANDOM_DEVICE_    # Use C++11 random device
+    _WEBSOCKETPP_CPP11_THREAD_           # Use C++11 threading
+    _WIN32_WINNT=0x0601                  # Windows 7+ for networking APIs
+    WIN32_LEAN_AND_MEAN                  # Reduce Windows.h bloat
+    ASIO_NO_WIN32_LEAN_AND_MEAN          # But allow asio to include what it needs
+)
 
 # Source files
 set(SOURCES
@@ -39,11 +45,24 @@ set(HEADERS
 # Build DLL
 add_library(APFrameworkCore SHARED ${SOURCES} ${HEADERS})
 
-target_include_directories(APFrameworkCore PUBLIC include)
+# Include directories
+target_include_directories(APFrameworkCore
+    PUBLIC
+        include
+        include/nlohmann  # nlohmann/json in our include directory
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/third_party/apclientpp
+        ${CMAKE_SOURCE_DIR}/third_party/wswrap/include
+        ${CMAKE_SOURCE_DIR}/third_party/asio/asio/include
+        ${CMAKE_SOURCE_DIR}/third_party/websocketpp
+        ${CMAKE_SOURCE_DIR}/third_party/valijson/include
+)
+
+# Link libraries
 target_link_libraries(APFrameworkCore
-    PRIVATE nlohmann_json::nlohmann_json
-    PRIVATE apclientpp::apclientpp
-    PRIVATE ws2_32  # Windows sockets for networking
+    PRIVATE apclientpp  # Header-only interface library
+    PRIVATE ws2_32      # Windows sockets
+    PRIVATE crypt32     # Windows crypto (for SSL)
 )
 
 # Set output directory
