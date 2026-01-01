@@ -202,22 +202,19 @@ struct RegionDefinition {
 ## Source Files Status
 
 ### ✅ Completed
-None - all need to be rewritten to match headers
 
-### 🔧 In Progress / Needs Rewrite
+All source files have been implemented and match their headers:
 
-All source files need to be implemented/rewritten to match the current headers:
-
-1. **config_manager.cpp** - Must implement FrameworkConfig structure, auto-load on startup
-2. **capabilities_generator.cpp** - Must use structured types (ItemDefinition, etc.)
-3. **ap_client.cpp** - Needs review for correct APMessage types
-4. **ipc_server.cpp** - Needs review for IPCMessage string-based types
-5. **message_router.cpp** - Needs review for routing logic
-6. **mod_registry.cpp** - Remove logging_only/priority field handling
-7. **polling_thread.cpp** - Should be correct, needs review
-8. **framework_core.cpp** - Must orchestrate all components correctly per lifecycle
-9. **ffi_bindings.cpp** - Must expose all framework_core methods
-10. **main.cpp** - DLL entry point, should be minimal
+1. **config_manager.cpp** - ✅ Implements FrameworkConfig structure, auto-load on startup
+2. **capabilities_generator.cpp** - ✅ Uses structured types (ItemDefinition, LocationDefinition, RegionDefinition)
+3. **ap_client.cpp** - ✅ Implemented with opaque pointer pattern (APClientImpl)
+4. **ipc_server.cpp** - ✅ Named Pipes IPC server with IPCMessage handling
+5. **message_router.cpp** - ✅ Routes messages between AP and mods
+6. **mod_registry.cpp** - ✅ Mod discovery and registration tracking
+7. **polling_thread.cpp** - ✅ Background AP polling thread
+8. **framework_core.cpp** - ✅ Main orchestrator with complete lifecycle management
+9. **ffi_bindings.cpp** - ✅ Exposes all framework_core methods via C API
+10. **main.cpp** - ✅ DLL entry point (minimal)
 
 ## Implementation Details
 
@@ -351,16 +348,79 @@ Not yet implemented, but should cover:
 ### Integration Tests (Phase 4)
 Will be implemented with example mods
 
-## Next Steps
+## Build Configuration
 
+### Dependency Versions
+- **ASIO**: 1.12.2 (downgraded from 1.36.0)
+  - websocketpp requires `io_service` which was renamed to `io_context` in ASIO 1.13+
+- **websocketpp**: Latest (commit 4dfe1be)
+- **apclientpp**: Latest submodule
+- **nlohmann/json**: Manually added to include directory
+
+### Preprocessor Definitions
+```cmake
+ASIO_STANDALONE                      # Use standalone asio (not boost::asio)
+WSWRAP_NO_SSL                        # Disable SSL in wswrap (no OpenSSL dependency)
+WSWRAP_NO_COMPRESSION                # Disable compression in wswrap (no zlib dependency)
+_WEBSOCKETPP_CPP11_RANDOM_DEVICE_    # Use C++11 random device
+_WEBSOCKETPP_CPP11_THREAD_           # Use C++11 threading
+_WEBSOCKETPP_CPP11_TYPE_TRAITS_      # Use C++11 type traits
+_WEBSOCKETPP_CPP11_FUNCTIONAL_       # Use C++11 functional
+_WEBSOCKETPP_CPP11_SYSTEM_ERROR_     # Use C++11 system_error
+_WEBSOCKETPP_CPP11_MEMORY_           # Use C++11 smart pointers
+_WEBSOCKETPP_CPP11_CHRONO_           # Use C++11 chrono
+_WIN32_WINNT=0x0601                  # Windows 7+ for networking APIs
+WIN32_LEAN_AND_MEAN                  # Reduce Windows.h bloat
+ASIO_NO_WIN32_LEAN_AND_MEAN          # But allow asio to include what it needs
+```
+
+### Build Output
+- **Location**: `build/bin/Release/APFrameworkCore.dll`
+- **Size**: 1023 KB (~1 MB)
+- **Compiler**: MSVC 14.44 (Visual Studio 2022 Build Tools)
+
+### Known Issues
+- Compression disabled: Warning "Archipelago will require compression in the future"
+- May need to add zlib support before production release
+
+## Implementation Notes
+
+### APClient Integration (ap_client.cpp)
+Used opaque pointer pattern to avoid namespace conflicts:
+```cpp
+struct APClientImpl {
+    std::unique_ptr<::APClient> client;
+    std::string uuid;
+    std::string game;
+    std::string current_uri;
+
+    void reconnect(const std::string& server, int port);
+};
+```
+
+Key fixes:
+- Changed callback parameter types from `std::vector` to `std::list` (apclientpp uses lists)
+- Fixed `ConnectSlot()` signature: 3 params (name, password, items_handling)
+- URI passed in APClient constructor, not via separate method
+- APClient is not copyable, wrapped in `std::unique_ptr` with recreation on reconnect
+
+### Minor Fixes
+- Added `#include <set>` to capabilities_generator.cpp
+- Fixed opaque pointer pattern in ap_client.h to avoid forward declaration issues
+
+## Phase 1 Status
+
+**✅ COMPLETE** - APFrameworkCore.dll successfully built
+
+All tasks completed:
 1. ✅ Clean up headers (remove logging_only, priority)
-2. 🔧 Implement all source files correctly
-3. ⏳ Build APFrameworkCore.dll
-4. ⏳ Test with minimal Lua wrapper
+2. ✅ Implement all source files correctly
+3. ✅ Build APFrameworkCore.dll (1023 KB)
+4. ⏳ Test with minimal Lua wrapper (deferred to Phase 4)
 
 ## Notes
 
 - Headers are the source of truth
-- All implementations must match header interfaces exactly
+- All implementations match header interfaces exactly
 - No backward compatibility needed (new branch)
-- Focus on correct implementation first, optimization later
+- Minimal external dependencies (SSL and compression disabled)

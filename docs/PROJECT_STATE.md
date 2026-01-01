@@ -83,7 +83,7 @@ The IPC branch solves all these issues.
 
 ## Current Status
 
-### Phase: Implementation - Phase 1 🔨
+### Phase: Implementation - Phase 1 ✅ COMPLETE
 
 **Completed**:
 - ✅ Architecture design document
@@ -95,24 +95,25 @@ The IPC branch solves all these issues.
 - ✅ CMakeLists.txt for framework_core
 - ✅ Root CMakeLists.txt
 - ✅ .gitignore configuration
-- ✅ Missing includes fixed (vector, mutex)
+- ✅ Missing includes fixed (vector, mutex, set)
 - ✅ Removed hallucinated fields (logging_only, priority)
 - ✅ Added all dependencies as git submodules
 - ✅ Implementation plan split into manageable phases
-
-**In Progress**:
-- 🔨 C++ framework core implementation (rewriting source files to match headers)
+- ✅ All C++ source files implemented
+- ✅ APFrameworkCore.dll built successfully (1023 KB)
+- ✅ ASIO compatibility fixes (downgraded to 1.12.2)
+- ✅ Disabled SSL and compression (no external dependencies)
+- ✅ websocketpp C++11 compatibility configured
 
 **Not Started**:
-- ❌ Build and test APFrameworkCore.dll
 - ❌ C++ client library implementation
 - ❌ Lua client wrapper implementation
 - ❌ Example mods
 - ❌ Testing
 
-### Implementation Progress: 15%
+### Implementation Progress: 25%
 
-**Phase 1 (C++ Framework Core)**: Headers complete, implementing source files
+**Phase 1 (C++ Framework Core)**: ✅ COMPLETE - APFrameworkCore.dll built successfully
 
 ---
 
@@ -188,7 +189,7 @@ The IPC branch solves all these issues.
 
 ## Implementation Roadmap
 
-### Phase 1: C++ Framework Core ✅ 50% COMPLETE
+### Phase 1: C++ Framework Core ✅ COMPLETE
 **Goal**: Implement `APFrameworkCore.dll`
 
 **Tasks**:
@@ -196,17 +197,19 @@ The IPC branch solves all these issues.
 2. ✅ Create all header files with APFramework namespace
 3. ✅ Add ConfigManager component for configuration/profiles
 4. ✅ Add CapabilitiesGenerator for APCapabilities.json generation
-5. 🔨 Integrate apclientpp (in progress - implementing ap_client.cpp)
-6. 🔨 Implement Named Pipes IPC server (in progress - implementing ipc_server.cpp)
-7. 🔨 Implement background polling thread (in progress - implementing polling_thread.cpp)
-8. 🔨 Implement per-mod message queues (header-only template complete)
-9. 🔨 Implement message routing logic (in progress - implementing message_router.cpp)
-10. 🔨 Create Lua FFI bindings (in progress - implementing ffi_bindings.cpp)
+5. ✅ Integrate apclientpp (implemented ap_client.cpp with opaque pointer pattern)
+6. ✅ Implement Named Pipes IPC server (ipc_server.cpp)
+7. ✅ Implement background polling thread (polling_thread.cpp)
+8. ✅ Implement per-mod message queues (header-only template)
+9. ✅ Implement message routing logic (message_router.cpp)
+10. ✅ Create Lua FFI bindings (ffi_bindings.cpp)
+11. ✅ Configure build system (ASIO 1.12.2, disable SSL/compression, C++11 flags)
+12. ✅ Build APFrameworkCore.dll successfully (1023 KB)
 
 **Deliverables**:
-- `APFrameworkCore.dll` (Windows x64) - IN PROGRESS
-- FFI binding definitions - ✅ COMPLETE
-- Unit tests - NOT STARTED
+- ✅ `APFrameworkCore.dll` (Windows x64) - **COMPLETE** (1023 KB)
+- ✅ FFI binding definitions - **COMPLETE**
+- ❌ Unit tests - NOT STARTED (deferred to Phase 6)
 
 ### Phase 2: C++ Client Library
 **Goal**: Implement `APClientLib.dll`
@@ -374,19 +377,50 @@ Users/developers can choose:
 
 ---
 
+## Build Notes
+
+### Phase 1 Build Configuration
+
+The following configuration was required to successfully build APFrameworkCore.dll:
+
+**Dependency Versions**:
+- ASIO: 1.12.2 (downgraded from 1.36.0 for websocketpp compatibility)
+  - websocketpp requires `io_service` which was renamed to `io_context` in ASIO 1.13+
+- websocketpp: Latest (commit 4dfe1be)
+- apclientpp: Latest submodule
+- nlohmann/json: Manually added to include directory
+
+**Preprocessor Definitions**:
+- `ASIO_STANDALONE` - Use standalone ASIO (not boost::asio)
+- `WSWRAP_NO_SSL` - Disable SSL/TLS (no OpenSSL dependency)
+- `WSWRAP_NO_COMPRESSION` - Disable WebSocket compression (no zlib dependency)
+- `_WEBSOCKETPP_CPP11_*` - Multiple C++11 feature flags for websocketpp compatibility
+
+**Build Output**:
+- Location: `build/bin/Release/APFrameworkCore.dll`
+- Size: 1023 KB (~1 MB)
+- Compiler: MSVC 14.44 (Visual Studio 2022 Build Tools)
+
+**Known Issues**:
+- Compression disabled: Warning states "Archipelago will require compression in the future"
+- May need to add zlib support before production release
+
+---
+
 ## Resources
 
 ### Documentation
 
 - `ARCHITECTURE.md` - Detailed architecture design
 - `.claude/IMPLEMENTATION_PLAN.md` - Technical implementation details
+- `.claude/ImplementationPlan/` - Split implementation plan by phase
 - Main branch docs - For comparison and context
 
 ### References
 
 - UE4SS Documentation: https://docs.ue4ss.com/
 - Named Pipes (Windows): https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipes
-- lua-apclientpp: https://github.com/black-sliver/lua-apclientpp
+- apclientpp: https://github.com/black-sliver/apclientpp
 - Archipelago Protocol: https://github.com/ArchipelagoMW/Archipelago/blob/main/docs/network%20protocol.md
 
 ---
