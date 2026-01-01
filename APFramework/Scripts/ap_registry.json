@@ -1,8 +1,0 @@
-{
-  "version": "1.0.0",
-  "description": "Central registry for AP-compatible mods",
-  "registered_mods": [],
-  "discovery_paths": [
-    "../"
-  ]
-}

@@ -1,312 +1,326 @@
-# Palworld Archipelago - Current State
+# Palworld Archipelago - IPC Branch Project State
 
+**Branch**: IPC Architecture Redesign
+**Version**: 2.0.0 (Design Phase)
 **Last Updated**: December 31, 2024
-**Status**: Phase 4 - Runtime Integration ✅ **CONNECTION CONFIG & POLLING COMPLETE**
+**Status**: 🔨 **IN DEVELOPMENT** - Architecture Design
+
+---
 
 ## Table of Contents
-1. [Project Overview](#project-overview)
-2. [Architecture](#architecture)
-3. [Current Progress](#current-progress)
-4. [Phase 4: Runtime Integration](#phase-4-runtime-integration-current)
-5. [Technical Details](#technical-details)
-6. [Next Steps](#next-steps)
+1. [Branch Overview](#branch-overview)
+2. [Design Goals](#design-goals)
+3. [Current Status](#current-status)
+4. [Architecture Summary](#architecture-summary)
+5. [Implementation Roadmap](#implementation-roadmap)
+6. [Differences from Main Branch](#differences-from-main-branch)
 
 ---
 
-## Project Overview
+## Branch Overview
 
-### What is this project?
-This project integrates Palworld into the [Archipelago](https://archipelago.gg) multiworld randomizer ecosystem. It consists of two main components:
+### What is This Branch?
 
-1. **AP World** (Python) - Server-side logic for randomization (`worlds/palworld/`)
-2. **APFramework** (Lua) - In-game client that connects to AP server (`APFramework/`)
+This branch represents a **complete architectural redesign** of the Palworld Archipelago Framework. Instead of the submodule architecture (main branch), this uses **Inter-Process Communication (IPC)** to enable:
 
-### Goals
-- Allow Palworld to participate in multiworld randomizer sessions
-- Randomize key items, locations, and progression across Palworld regions
-- Enable cross-game item sharing through Archipelago protocol
-- Provide a flexible framework for AP-enabled Palworld mods
+- **Standard UE4SS mods** (not forced submods)
+- **Non-blocking operation** (no thread blocking)
+- **Multiple mod types** (Lua, C++, BP Logic)
+- **Clean separation** of framework and mod concerns
 
-### Current Phase: Phase 4 - Runtime Integration
-**Objective**: Implement runtime location checks, item receiving, and continuous polling for real-time AP events.
+### Why the Redesign?
+
+The main branch (submodule architecture) has fundamental limitations:
+
+1. **Blocking Thread Issue**: Continuous polling blocks all mods loaded after APFramework
+2. **Submod Requirement**: Mods must be placed inside APFramework folder structure
+3. **Lua State Issues**: Threading approaches cause "Lua state changed" errors
+4. **Limited Ecosystem**: Doesn't work well with existing UE4SS mods
+
+The IPC branch solves all these issues.
+
+### Relationship to Main Branch
+
+- **Main Branch**: Working proof-of-concept, temporary blocking loop solution
+- **IPC Branch**: Production-ready architecture, no blocking, standard mods
+- **No Backward Compatibility**: Clean break, different design philosophy
 
 ---
 
-## Architecture
+## Design Goals
 
-### High-Level Overview
+### Primary Objectives
+
+✅ **Standard Mod Support**
+- Mods are normal UE4SS mods in standard locations
+- No special folder structure required
+- Works with Lua mods, C++ mods, and BP Logic mods
+
+✅ **Non-Blocking Operation**
+- Framework doesn't block other mods during initialization
+- Each mod runs independently
+- No threading issues with Lua states
+
+✅ **Fault Isolation**
+- One mod's failure doesn't affect others
+- Framework continues working if a mod crashes
+- Clean error handling and reporting
+
+✅ **Developer-Friendly**
+- Simple API for mod developers
+- Well-documented protocol
+- Example mods for each type (Lua, C++, BP)
+
+### Technical Goals
+
+- Named Pipes for IPC (low latency, native Windows)
+- C++ core for framework (native threading, no Lua limitations)
+- JSON message protocol (human-readable, easy to debug)
+- Per-mod message queues (scalability, isolation)
+- Auto-discovery of AP-enabled mods (convenience)
+
+---
+
+## Current Status
+
+### Phase: Architecture Design ✅
+
+**Completed**:
+- ✅ Architecture design document
+- ✅ IPC protocol specification
+- ✅ Threading model defined
+- ✅ Mod integration patterns documented
+
+**In Progress**:
+- 🔨 Implementation plan
+- 🔨 Technical specifications
+
+**Not Started**:
+- ❌ C++ framework core implementation
+- ❌ C++ client library implementation
+- ❌ Lua client wrapper implementation
+- ❌ Example mods
+- ❌ Testing
+
+### Implementation Progress: 0%
+
+This branch is in **design phase only**. No code has been written yet.
+
+---
+
+## Architecture Summary
+
+### System Components
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Palworld (Unreal Engine 4)                                  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ UE4SS (Lua Scripting System)                          │  │
-│  │  ┌─────────────────────────────────────────────────┐  │  │
-│  │  │ APFramework (Lua)                               │  │  │
-│  │  │  - Centralized connection config                │  │  │
-│  │  │  - Continuous polling (blocking loop)           │  │  │
-│  │  │  - Mod discovery & registration                 │  │  │
-│  │  │  - Capability manifest generation               │  │  │
-│  │  │  - APClient (lua-apclientpp wrapper)            │  │  │
-│  │  │    └─ WebSocket connection to AP server         │  │  │
-│  │  │                                                   │  │  │
-│  │  │  Submodules (e.g., APTest):                     │  │  │
-│  │  │  - ap_config.json (capabilities only)           │  │  │
-│  │  │  - Items, locations, regions for this mod       │  │  │
-│  │  └─────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                         ↕ WebSocket (ws://)
-┌─────────────────────────────────────────────────────────────┐
-│ Archipelago Server (Python)                                 │
-│  - Hosts multiworld session                                 │
-│  - Manages item/location randomization                      │
-│  - Routes items between players/games                       │
-│  - Uses worlds/palworld/ for Palworld logic                 │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ UE4SS Mod Ecosystem                                     │
+│                                                          │
+│  ┌────────────────────────────────────────────────┐    │
+│  │ APFramework (Lua mod + C++ core)               │    │
+│  │  - Loads APFrameworkCore.dll via FFI           │    │
+│  │  - Starts IPC server (Named Pipes)             │    │
+│  │  - Auto-discovers AP mods                      │    │
+│  │  - Connects to AP server                       │    │
+│  │  - Routes messages between AP ↔ mods           │    │
+│  └────────────────────────────────────────────────┘    │
+│         ↕ IPC (Named Pipes, JSON messages)             │
+│  ┌────────────────────────────────────────────────┐    │
+│  │ AP-Enabled Mods (standard UE4SS mods)          │    │
+│  │                                                 │    │
+│  │  Lua Mod:                                       │    │
+│  │  └─ Uses ap_client.lua (pure Lua IPC wrapper)  │    │
+│  │                                                 │    │
+│  │  C++ Mod:                                       │    │
+│  │  └─ Links APClientLib.dll (IPC client)         │    │
+│  │                                                 │    │
+│  │  BP Logic Mod:                                  │    │
+│  │  └─ Companion Lua mod (BP ↔ Lua ↔ IPC)         │    │
+│  └────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Design Philosophy: Submodule Architecture
+### Key Features
 
-**Problem**: UE4SS mods run in isolated Lua sandboxes - they cannot share data via global namespace.
+**APFrameworkCore.dll** (C++ Library):
+- lua-apclientpp integration
+- Background polling thread (no blocking)
+- Named Pipes IPC server
+- Per-mod message queues
+- Message routing logic
 
-**Solution**: Instead of separate standalone mods, AP-enabled mods are **submodules** of APFramework:
+**Client Libraries**:
+- **ap_client.lua**: Pure Lua wrapper for Lua mods
+- **APClientLib.dll**: C++ library for C++ mods
 
+**IPC Protocol**:
+- Named Pipes (Windows)
+- JSON messages (newline-delimited)
+- Bidirectional communication
+- Non-blocking reads/writes
+
+**Message Types**:
+- `register`, `location_check`, `status_update`, `poll` (mod → framework)
+- `item_received`, `location_checked`, `connection_status`, `framework_ready` (framework → mod)
+
+### Threading Model
+
+**Framework**:
+- **Main Thread**: IPC server (mod connections, message dispatch)
+- **Polling Thread**: AP client (continuous polling, message routing)
+
+**Mods**:
+- Poll at their own pace (typically once per frame)
+- No forced synchronization
+- Freedom to use their own threading
+
+---
+
+## Implementation Roadmap
+
+### Phase 1: C++ Framework Core
+**Goal**: Implement `APFrameworkCore.dll`
+
+**Tasks**:
+1. Set up C++ project (CMake)
+2. Integrate lua-apclientpp
+3. Implement Named Pipes IPC server
+4. Implement background polling thread
+5. Implement per-mod message queues
+6. Implement message routing logic
+7. Create Lua FFI bindings
+
+**Deliverables**:
+- `APFrameworkCore.dll` (Windows x64)
+- FFI binding definitions
+- Unit tests
+
+### Phase 2: C++ Client Library
+**Goal**: Implement `APClientLib.dll`
+
+**Tasks**:
+1. Implement Named Pipes IPC client
+2. Message queue polling
+3. C API for UE4SS C++ mods
+4. Thread-safe operations
+5. Error handling
+
+**Deliverables**:
+- `APClientLib.dll` (Windows x64)
+- C header files
+- Usage documentation
+
+### Phase 3: Lua Client Wrapper
+**Goal**: Implement `ap_client.lua`
+
+**Tasks**:
+1. Named Pipes wrapper (pure Lua)
+2. JSON serialization/deserialization
+3. Event callback system
+4. Polling helpers
+5. Error handling
+
+**Deliverables**:
+- `ap_client.lua` module
+- API documentation
+- Usage examples
+
+### Phase 4: Framework Lua Mod
+**Goal**: Implement APFramework UE4SS mod
+
+**Tasks**:
+1. Load `APFrameworkCore.dll` via FFI
+2. Start IPC server
+3. Auto-discovery (`ap_config.json` scanning)
+4. Configuration management
+5. Connect to AP server
+6. Lifecycle management
+
+**Deliverables**:
+- `APFramework/Scripts/main.lua`
+- `APFramework/Scripts/APFramework.lua`
+- Configuration files
+- Installation guide
+
+### Phase 5: Example Mods
+**Goal**: Create reference implementations
+
+**Tasks**:
+1. Example Lua mod (simple item/location integration)
+2. Example C++ mod (demonstrates C++ API)
+3. Example BP companion mod (BP ↔ Lua ↔ IPC)
+4. Documentation for each
+
+**Deliverables**:
+- Three example mods
+- README for each
+- Integration guides
+
+### Phase 6: Testing & Documentation
+**Goal**: Validate and document
+
+**Tasks**:
+1. Unit tests for C++ components
+2. Integration tests (framework + mods)
+3. Performance testing (IPC latency, throughput)
+4. API documentation
+5. Developer guide
+6. User installation guide
+
+**Deliverables**:
+- Test suite
+- Complete documentation
+- Migration guide (from main branch)
+
+---
+
+## Differences from Main Branch
+
+### Main Branch (Submodule Architecture)
+
+**Structure**:
 ```
 APFramework/
-├── config.json          # Framework-level configuration
-├── config.example.json  # Template for users
-├── Scripts/             # Core framework code
-│   ├── main.lua         # UE4SS entry point
-│   ├── APFramework.lua  # Core framework
-│   ├── APClient.lua     # WebSocket client
-│   ├── EventBus.lua     # Event system + frame callbacks
-│   ├── ModRegistry.lua  # Mod discovery
-│   ├── ConfigManager.lua # Config management
-│   └── lib/
-│       ├── lua-apclientpp.dll  # Native WebSocket library
-│       └── lunajson/           # JSON parsing
-└── Mods/                # Submodules (AP-enabled mods)
+├── Scripts/              # Framework core (Lua)
+└── Mods/                 # Submodules (AP-enabled mods)
     └── APTest/
-        ├── ap_config.json  # Mod metadata + capabilities
-        └── main.lua        # Mod-specific logic (optional)
+        └── ap_config.json
 ```
 
-**Discovery Process**:
-1. APFramework scans `APFramework/Mods/*/ap_config.json`
-2. Parses each config for items, locations, regions
-3. Generates `APCapabilities.json` manifest (used by Python AP World during generation)
-4. Connects to AP server using centralized config at `APFramework/config.json`
+**Characteristics**:
+- Mods must be inside APFramework folder
+- Blocking while loop for polling (temporary solution)
+- Direct function calls between framework and mods
+- Same Lua state shared across framework and submods
+- Blocks other mods during initialization
 
----
+**Status**: Working proof-of-concept, not production-ready
 
-## Current Progress
+### IPC Branch (IPC Architecture)
 
-### ✅ Phase 1: AP World - COMPLETE
-**Status**: Generates successfully
-
-- Python AP World implementation in `worlds/palworld/`
-- 61 locations across 9 regions
-- 33 unique items (+ Wood as filler to reach 61)
-- 14 player options (goal type, starting items, etc.)
-- Generates valid `.apworld` files and multiworld ZIPs
-
-**Known Simplifications** (temporary for Phase 3 testing):
-- All items classified as `filler` (should be `progression`/`useful`)
-- Hub-and-spoke region connections (should be progression-based)
-- No access rules (should require items to unlock regions/locations)
-- Completion condition is `lambda state: True` (should check goal)
-
-### ✅ Phase 2: APFramework Core - COMPLETE
-**Status**: Working
-
-- File-based submodule discovery ✅
-- JSON parsing (lunajson) ✅
-- Manifest generation (`APCapabilities.json`) ✅
-- Event bus for mod communication ✅
-- State management ✅
-- Test submodule (APTest) ✅
-
-### ✅ Phase 3: Client Connection - COMPLETE
-**Status**: Successfully connecting and authenticating!
-
-**What Works**:
-- lua-apclientpp DLL loads successfully ✅
-- APClient wrapper created with logging ✅
-- Client instantiation succeeds ✅
-- Event handlers register without errors ✅
-- Polling executes without crashes ✅
-- Connection reaches state 4 (SLOT_CONNECTED) ✅
-- Server logs: "TP1 (Team #1) playing Palworld has joined" ✅
-
-**Key Fix**:
-```lua
--- Before (broken):
-self.client = apclientpp.new(uuid, game_name, server)
-
--- After (working):
-self.client = apclientpp(uuid, game_name, server)
+**Structure**:
+```
+ue4ss/mods/APFramework/        # Framework (Lua + C++)
+ue4ss/mods/MyLuaMod/           # Standard Lua mod
+ue4ss/mods/MyCppMod/           # Standard C++ mod
 ```
 
-The lua-apclientpp library uses `__call` metamethod as constructor, not a `.new()` method.
+**Characteristics**:
+- Mods are standard UE4SS mods in normal locations
+- C++ background thread for polling (non-blocking)
+- IPC communication (Named Pipes, JSON)
+- Isolated environments (no Lua state crossing)
+- No blocking, mods load independently
 
----
+**Status**: Design phase, implementation in progress
 
-## Phase 4: Runtime Integration (CURRENT)
+### Migration Path
 
-### ✅ Completed Features
+**Not supported**. IPC branch is a complete redesign.
 
-#### 1. Connection Config Redesign ✅
-**Status**: COMPLETE
-
-**Implementation**:
-- Centralized connection configuration at `APFramework/config.json`
-- Per-mod configs (`ap_config.json`) now only contain capabilities (items/locations/regions)
-- ConfigManager updated with new methods:
-  - `GetConnectionConfig()` - Get AP connection settings
-  - `SetConnectionConfig(config)` - Update connection settings
-  - `Save()` - Persist config changes to disk
-- Poll interval configurable (`poll_interval_ms` in framework config, default: 16ms)
-
-**Benefits**:
-- Single source of truth for connection settings
-- Easier to manage for users
-- Cleaner separation of concerns (framework config vs mod capabilities)
-- Foundation for future APMenuMod UI
-
-**Files Modified**:
-- `APFramework/config.json` - Created with connection settings
-- `APFramework/config.example.json` - Moved to framework root
-- `ConfigManager.lua` - Added new methods, updated file path
-- `main.lua` - Reads connection from ConfigManager instead of mod scanning
-- `APTest/ap_config.json` - Removed `ap_connection` section
-
-#### 2. Continuous Polling (Temporary Solution) ✅
-**Status**: WORKING (temporary implementation)
-
-**Implementation**:
-Blocking while loop in main Lua state:
-
-```lua
-local processing = true
-local start_time = os.clock()
-
-while processing do
-    local current_time = os.clock()
-    local elapsed_time = current_time - start_time
-
-    if elapsed_time >= poll_interval_sec then
-        -- Poll the client
-        local apclient = APFrameworkCore:GetAPClient()
-        if apclient then
-            apclient:Poll()
-        end
-
-        -- Execute frame callbacks for submods
-        EventBus:ExecuteFrameCallbacks()
-
-        start_time = current_time
-    end
-end
-```
-
-**Why This Works**:
-- Runs in the **same Lua state** as APClient creation
-- No threading = No "Lua state changed" errors
-- APClient connection stays alive
-- Handlers fire correctly when items received
-
-**Critical Limitations**:
-- ⚠️ **Blocks all subsequent mods** - UE4SS loads mods sequentially on shared thread
-- ⚠️ **No yielding to UE4** - Cannot use UE4 functions in event handlers yet
-- ⚠️ **Not production-ready** - Acceptable for testing only
-
-**Testing Results**:
-```
-[APFramework] Starting continuous polling (interval: 16ms)
-[APClient] Item received: 8370050  ← SUCCESS!
-```
-
-Item receiving via `!getitem` command confirmed working!
-
-#### 3. Frame Callback System for Submods ✅
-**Status**: IMPLEMENTED
-
-**Purpose**: Allow submods to execute code during polling loop
-
-**API**:
-```lua
-APFramework.RegisterFrameCallback(mod_id, callback)
-APFramework.UnregisterFrameCallback(mod_id)
-```
-
-**Usage**:
-```lua
--- In submod's main.lua
-APFramework.RegisterFrameCallback("my_mod", function()
-    -- Runs every poll iteration (~16ms by default)
-    -- Same Lua state as APClient
-    -- Can perform Lua operations
-    -- Cannot use UE4 functions yet (no game thread)
-end)
-```
-
-**Implementation**:
-- EventBus manages callbacks
-- Executed during polling loop after APClient:Poll()
-- Error isolation via pcall() - one failure won't crash others
-- Logged errors show mod_id for debugging
-
-**Files Modified**:
-- `EventBus.lua` - Added frame callback management
-- `APFramework.lua` - Exposed public API
-- `main.lua` - Integrated callback execution into polling loop
-
-### ❌ Known Limitations (To Be Addressed)
-
-1. **Threading Issue**:
-   - Blocking loop prevents other mods from loading
-   - Need to find UE4 game tick hook that runs in same Lua state
-   - Possible approaches: RegisterHook on PlayerController tick, UE4SS event system
-
-2. **No UE4 Operations Yet**:
-   - Event handlers run in polling loop (not game thread)
-   - Cannot grant items to player yet
-   - Cannot check locations via UE4 hooks yet
-   - Will need ExecuteInGameThread() once we find proper hook
-
-3. **Item Granting Not Implemented**:
-   - Handlers fire correctly
-   - Item data received
-   - Need to map AP item IDs to Palworld items
-   - Need UE4 inventory modification functions
-
-4. **Location Checking Not Implemented**:
-   - Need to hook Palworld game events (chest open, pal capture, etc.)
-   - Need to map game events to AP location IDs
-   - Need to call `APClient:CheckLocation(location_id)`
-
-5. **State Persistence Not Implemented**:
-   - Need to save `last_received_index`
-   - Need to save `checked_locations`
-   - Need to restore on reconnection
-
-### 📋 Current Testing Status
-
-**What's Been Tested**:
-- ✅ Framework initialization
-- ✅ Mod discovery
-- ✅ Connection to AP server
-- ✅ Authentication (slot connected)
-- ✅ Continuous polling (stable, no crashes)
-- ✅ Item receiving handler fires (tested with `!getitem` command)
-- ✅ Event data logged correctly
-
-**What Hasn't Been Tested**:
-- ❌ Item granting to player inventory
-- ❌ Location checking
-- ❌ State persistence across sessions
-- ❌ Multi-mod support
-- ❌ Performance with other UE4SS mods installed
+Users/developers can choose:
+- **Main Branch**: Quick testing, proof-of-concept, simple setups
+- **IPC Branch**: Production use, complex mods, ecosystem integration
 
 ---
 
@@ -314,138 +328,54 @@ end)
 
 ### Immediate Priorities
 
-1. **Research Permanent Polling Solution** (HIGH PRIORITY)
-   - Find UE4 game tick hook that runs in same Lua state
-   - Investigate RegisterHook on PlayerController:Tick
-   - Contact UE4SS maintainers for guidance
-   - Goal: Non-blocking polling that doesn't interfere with other mods
+1. **Complete Implementation Plan** (this document)
+   - Detailed technical specifications
+   - Build system setup
+   - Development environment
+   - Testing strategy
 
-2. **Implement Item Granting** (MEDIUM PRIORITY)
-   - Research Palworld inventory modification functions
-   - Map AP item IDs to Palworld items
-   - Implement item spawning in handler
-   - Test with various item types (resources, pals, technology)
+2. **Set Up Development Environment**
+   - CMake project for C++ components
+   - Build scripts
+   - Development dependencies
 
-3. **Implement Location Checking** (MEDIUM PRIORITY)
-   - Research Palworld game event hooks
-   - Start with simple events (chest opens)
-   - Map game events to AP location IDs
-   - Send LocationChecks() to server
+3. **Implement APFrameworkCore.dll**
+   - Named Pipes IPC server
+   - lua-apclientpp integration
+   - Background polling thread
 
-4. **Implement State Persistence** (LOW PRIORITY)
-   - Extend StateManager for AP state
-   - Save last_received_index after each item
-   - Save checked_locations after each check
-   - Load on startup and restore state
+4. **Implement Client Libraries**
+   - APClientLib.dll (C++)
+   - ap_client.lua (Lua)
 
-### Future Work
+5. **Create Example Mods**
+   - Validate API design
+   - Test integration patterns
 
-5. **Restore AP World Rules**
-   - Restore item classifications (progression/useful/filler)
-   - Restore region connections (progression-based)
-   - Restore access rules (require items to unlock)
-   - Restore proper completion condition
+### Future Milestones
 
-6. **Full Integration Testing**
-   - Generate multiworld with multiple games
-   - Test cross-game item sending
-   - Test goal completion
-   - Test edge cases (disconnect/reconnect, save/load)
-
-7. **Polish & Release**
-   - Remove debug logging
-   - Add user-friendly error messages
-   - Write installation guide
-   - Publish to AP community
-
----
-
-## Technical Details
-
-### lua-apclientpp Library
-
-**API Version**: v0.6.4 (built on apclientpp)
-
-**Key Methods**:
-```lua
--- Create client
-client = apclientpp(uuid, game_name, server)  -- server = "host:port"
-
--- Connection lifecycle
-client:poll()  -- Call every frame to process network I/O
-state = client:get_state()  -- 0-4 (DISCONNECTED to SLOT_CONNECTED)
-
--- Event handlers
-client:set_socket_connected_handler(function() end)
-client:set_room_info_handler(function() end)
-client:set_slot_connected_handler(function(slot_data) end)
-client:set_items_received_handler(function(items) end)
-client:set_location_checked_handler(function(locations) end)
-
--- Commands
-client:ConnectSlot(name, password, items_handling, tags, version)
-client:LocationChecks(location_ids)
-client:StatusUpdate(status)
-```
-
-### Configuration System
-
-**Framework Config** (`APFramework/config.json`):
-```json
-{
-  "framework": {
-    "version": "1.0.0",
-    "debug_mode": true,
-    "auto_connect": true,
-    "poll_interval_ms": 16
-  },
-  "ap_connection": {
-    "enabled": true,
-    "server": "localhost",
-    "port": 38281,
-    "slot_name": "Player1",
-    "password": "",
-    "auto_reconnect": true
-  },
-  "ui": {
-    "show_notifications": true,
-    "show_debug_overlay": false
-  }
-}
-```
-
-**Mod Config** (`APFramework/Mods/*/ap_config.json`):
-```json
-{
-  "ap_enabled": true,
-  "mod_info": {
-    "id": "aptest",
-    "name": "AP Test Mod",
-    "version": "1.0.0"
-  },
-  "capabilities": {
-    "items": [...],
-    "locations": [...],
-    "regions": [...]
-  }
-}
-```
+- **Alpha Release**: Core framework + client libraries working
+- **Beta Release**: Example mods, initial documentation
+- **Release Candidate**: Full test coverage, complete documentation
+- **v2.0.0 Release**: Production-ready IPC architecture
 
 ---
 
 ## Resources
 
 ### Documentation
-- Archipelago API: https://github.com/ArchipelagoMW/Archipelago/blob/main/docs/network%20protocol.md
-- lua-apclientpp: https://github.com/black-sliver/lua-apclientpp
-- apclientpp: https://github.com/black-sliver/apclientpp
-- UE4SS: https://docs.ue4ss.com/
 
-### Communication
-- Archipelago Discord: https://discord.gg/archipelago
-- Channel: #tech-support (for connection issues)
-- Channel: #world-dev (for AP World questions)
+- `ARCHITECTURE.md` - Detailed architecture design
+- `.claude/IMPLEMENTATION_PLAN.md` - Technical implementation details
+- Main branch docs - For comparison and context
+
+### References
+
+- UE4SS Documentation: https://docs.ue4ss.com/
+- Named Pipes (Windows): https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipes
+- lua-apclientpp: https://github.com/black-sliver/lua-apclientpp
+- Archipelago Protocol: https://github.com/ArchipelagoMW/Archipelago/blob/main/docs/network%20protocol.md
 
 ---
 
-**For questions or collaboration, see COLLABORATOR_NOTES.md in the repository.**
+**This IPC branch represents the future of the Palworld Archipelago Framework - a production-ready architecture that integrates seamlessly with the UE4SS mod ecosystem.**
