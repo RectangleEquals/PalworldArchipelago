@@ -1,0 +1,68 @@
+# Palworld Archipelago Test Configuration
+# Place this file in your Archipelago Players folder or use it to generate
+
+description: TP1  # Used to describe your yaml. Could be your name or a title for the yaml.
+name: TP1  # Your name in the multiworld
+
+game: Palworld
+
+requires:
+  version: 0.6.5  # Minimum Archipelago version
+
+Palworld:
+  # Goal Options
+  goal:
+    both_towers: 50  # Default: Complete both towers
+    tower_free_pal: 0
+    tower_eternal_pyre: 0
+    capture_all_pals: 0
+    player_level_50: 0
+    all_alpha_pals: 0
+
+  # Progression Options
+  starting_equipment:
+    basic_tools: 50  # Start with basic tools
+    basic_tools_and_spheres: 50
+    nothing: 0
+
+  starting_region_access:
+    tutorial_and_meadows: 50  # Default
+    tutorial_only: 0
+    all_regions: 0
+
+  technology_point_progression:
+    shuffled: 50  # Technology points in item pool
+    vanilla: 0
+    progressive: 0
+
+  randomize_pal_captures: false
+
+  # Location Inclusion Options
+  include_chests: true
+  include_fast_travel_points: false  # Too many checks
+  include_alpha_pals: true
+  include_tower_bosses: true
+  include_dungeons: true
+  include_technology_unlocks: true
+  include_pal_milestones: false  # Optional content
+  include_base_milestones: false  # Optional content
+
+  # Item Pool Options
+  pal_sphere_quantity: 10  # Number of each sphere tier
+  boss_key_fragment_count: 5
+  dungeon_key_count: 3
+
+  # Progressive Items
+  progressive_weapons: true
+  progressive_armor: true
+  progressive_tools: true
+
+  # Difficulty
+  difficulty_adjustment: 5  # 1-10 scale
+
+  # Mod Support
+  enable_mods: false  # Disable for testing without mods
+  capability_manifest_path: ""  # Empty = use default
+
+  # Multiplayer
+  death_link: false

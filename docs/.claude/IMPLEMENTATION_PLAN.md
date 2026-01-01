@@ -64,18 +64,32 @@ ipc_branch/
 │   └── lua_client/               # ap_client.lua
 │       ├── ap_client.lua
 │       └── tests/
-├── framework_mod/                # APFramework UE4SS mod
+├── APFramework/                  # APFramework UE4SS mod (installed to ue4ss/mods/)
 │   ├── Scripts/
 │   │   ├── main.lua
 │   │   ├── APFramework.lua
 │   │   └── lib/
+│   │       ├── APFrameworkCore.dll
+│   │       ├── ap_client.lua
+│   │       └── windows_pipe.lua
 │   └── config.json
 ├── examples/                     # Example mods
 │   ├── lua_example/
 │   ├── cpp_example/
 │   └── bp_companion_example/
+├── worlds/                       # Archipelago world package
+│   └── palworld/
+│       ├── __init__.py
+│       ├── items.py
+│       ├── locations.py
+│       ├── regions.py
+│       └── ...
+├── test_yamls/                   # Test YAML configurations
+│   └── example_palworld.yaml
 ├── build/                        # Build output (gitignored)
-└── CMakeLists.txt                # Root CMake
+├── CMakeLists.txt                # Root CMake
+├── LICENSE                       # Project license
+└── README.md                     # Branch overview
 ```
 
 ---
@@ -692,7 +706,7 @@ return M
 
 ### 4.1 Entry Point
 
-**File**: `framework_mod/Scripts/main.lua`
+**File**: `APFramework/Scripts/main.lua`
 
 ```lua
 print("=== APFramework v2.0 (IPC) Loading ===")
@@ -716,7 +730,7 @@ return APFramework
 
 ### 4.2 Framework Wrapper
 
-**File**: `framework_mod/Scripts/APFramework.lua`
+**File**: `APFramework/Scripts/APFramework.lua`
 
 ```lua
 local APFramework = {}

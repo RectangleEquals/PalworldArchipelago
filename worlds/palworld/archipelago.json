@@ -1,0 +1,11 @@
+{
+  "game": "Palworld",
+  "world_version": "1.0.0",
+  "version": 7,
+  "compatible_version": 7,
+  "minimum_ap_version": "0.6.4",
+  "display_name": "Palworld",
+  "authors": ["SpectreCular", "AgStarRay"],
+  "url": "https://github.com/RectangleEquals/PalworldArchipelago",
+  "description": "Palworld Archipelago integration with dynamic mod support via UE4SS framework"
+}
