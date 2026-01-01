@@ -101,4 +101,6 @@ APFramework/Scripts/lib/*.so
 # Archipelago world build artifacts
 worlds/**/__pycache__/
 worlds/**/*.pyc
-docs/.claude/PreviousPrompts/Chat_01.md
+
+# Private documentation prompts
+docs/.claude/PreviousPrompts/
