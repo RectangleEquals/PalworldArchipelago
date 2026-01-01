@@ -1,0 +1,20 @@
+{
+  "framework": {
+    "version": "1.0.0",
+    "debug_mode": false,
+    "auto_connect": true,
+    "poll_interval_ms": 16
+  },
+  "ap_connection": {
+    "enabled": false,
+    "server": "localhost",
+    "port": 38281,
+    "slot_name": "YourSlotName",
+    "password": "",
+    "auto_reconnect": true
+  },
+  "ui": {
+    "show_notifications": true,
+    "show_debug_overlay": false
+  }
+}

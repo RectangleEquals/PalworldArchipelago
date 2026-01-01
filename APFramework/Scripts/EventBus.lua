@@ -13,6 +13,7 @@ EventBus.initialized = false
 EventBus.events = {}
 EventBus.next_subscription_id = 1
 EventBus.subscriptions = {}
+EventBus.frame_callbacks = {} -- Frame callbacks for polling loop
 
 ---Initialize the event bus
 ---@return boolean success
@@ -24,6 +25,7 @@ function EventBus:Initialize()
     self.events = {}
     self.next_subscription_id = 1
     self.subscriptions = {}
+    self.frame_callbacks = {}
     self.initialized = true
 
     print("[EventBus] Initialized")
@@ -243,6 +245,93 @@ function EventBus:PrintStatistics()
     end
 
     print("[EventBus] ===================")
+end
+
+---Register a frame callback for submods
+---@param mod_id string Unique identifier for the mod
+---@param callback function Callback function to run each frame
+---@return boolean success
+function EventBus:RegisterFrameCallback(mod_id, callback)
+    if not self.initialized then
+        print("[EventBus] Error: Not initialized")
+        return false
+    end
+
+    if type(mod_id) ~= "string" then
+        print("[EventBus] Error: mod_id must be a string")
+        return false
+    end
+
+    if type(callback) ~= "function" then
+        print("[EventBus] Error: callback must be a function")
+        return false
+    end
+
+    self.frame_callbacks[mod_id] = callback
+    print(string.format("[EventBus] Registered frame callback for mod: %s", mod_id))
+    return true
+end
+
+---Unregister a frame callback
+---@param mod_id string Unique identifier for the mod
+---@return boolean success
+function EventBus:UnregisterFrameCallback(mod_id)
+    if not self.initialized then
+        print("[EventBus] Error: Not initialized")
+        return false
+    end
+
+    if self.frame_callbacks[mod_id] then
+        self.frame_callbacks[mod_id] = nil
+        print(string.format("[EventBus] Unregistered frame callback for mod: %s", mod_id))
+        return true
+    end
+
+    print(string.format("[EventBus] Warning: No frame callback found for mod: %s", mod_id))
+    return false
+end
+
+---Execute all registered frame callbacks
+---Called internally by the polling loop
+---@return integer callbacks_called Number of callbacks successfully executed
+function EventBus:ExecuteFrameCallbacks()
+    if not self.initialized then
+        return 0
+    end
+
+    local callbacks_called = 0
+    local errors = {}
+
+    for mod_id, callback in pairs(self.frame_callbacks) do
+        local success, error_msg = pcall(callback)
+
+        if success then
+            callbacks_called = callbacks_called + 1
+        else
+            table.insert(errors, {
+                mod_id = mod_id,
+                error = error_msg
+            })
+            print(string.format("[EventBus] Frame callback error (%s): %s", mod_id, tostring(error_msg)))
+        end
+    end
+
+    if #errors > 0 then
+        print(string.format("[EventBus] Frame callbacks had %d error(s) out of %d callbacks",
+              #errors, self:GetFrameCallbackCount()))
+    end
+
+    return callbacks_called
+end
+
+---Get number of registered frame callbacks
+---@return integer count Number of frame callbacks
+function EventBus:GetFrameCallbackCount()
+    local count = 0
+    for _ in pairs(self.frame_callbacks) do
+        count = count + 1
+    end
+    return count
 end
 
 return EventBus

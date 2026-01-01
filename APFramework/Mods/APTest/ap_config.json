@@ -28,11 +28,5 @@
         "connects_to": []
       }
     ]
-  },
-  "ap_connection": {
-    "server": "localhost",
-    "port": 38281,
-    "slot_name": "Test Player 1",
-    "password": ""
   }
 }

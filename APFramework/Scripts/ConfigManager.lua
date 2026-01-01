@@ -12,7 +12,7 @@ local ConfigManager = {}
 ConfigManager.initialized = false
 ConfigManager.config = {}
 ConfigManager.defaults = {}
-ConfigManager.config_file = "APFramework/config.json"
+ConfigManager.config_file = "ue4ss\\Mods\\APFramework\\config.json"
 
 ---Default configuration values
 ConfigManager.defaults = {
@@ -255,6 +255,36 @@ end
 ---@return table config Full configuration table
 function ConfigManager:GetAll()
     return self.config
+end
+
+---Get just the configuration object (alias for GetAll)
+---@return table config Full configuration table
+function ConfigManager:GetConfig()
+    return self.config
+end
+
+---Get AP connection configuration
+---@return table|nil connection_config Connection configuration or nil
+function ConfigManager:GetConnectionConfig()
+    if not self.config or not self.config.ap_connection then
+        return nil
+    end
+    return self.config.ap_connection
+end
+
+---Set AP connection configuration
+---@param connection_config table Connection configuration to set
+function ConfigManager:SetConnectionConfig(connection_config)
+    if not self.config then
+        self.config = {}
+    end
+    self.config.ap_connection = connection_config
+end
+
+---Save configuration to disk
+---@return boolean success
+function ConfigManager:Save()
+    return self:SaveConfigFile()
 end
 
 ---Get default configuration

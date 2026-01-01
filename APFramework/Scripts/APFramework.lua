@@ -475,6 +475,37 @@ function APFramework.FireEvent(event_name, event_data)
     EventBus:Fire(event_name, event_data)
 end
 
+---Get APClient instance for continuous polling
+---@return table|nil APClient instance or nil
+function APFramework:GetAPClient()
+    return APClient
+end
+
+---Register a frame callback for submods (temporary polling loop solution)
+---@param mod_id string Unique identifier for the mod
+---@param callback function Callback function to run each polling iteration
+---@return boolean success
+function APFramework.RegisterFrameCallback(mod_id, callback)
+    if not EventBus then
+        print("[APFramework ERROR] Event bus not initialized")
+        return false
+    end
+
+    return EventBus:RegisterFrameCallback(mod_id, callback)
+end
+
+---Unregister a frame callback
+---@param mod_id string Unique identifier for the mod
+---@return boolean success
+function APFramework.UnregisterFrameCallback(mod_id)
+    if not EventBus then
+        print("[APFramework ERROR] Event bus not initialized")
+        return false
+    end
+
+    return EventBus:UnregisterFrameCallback(mod_id)
+end
+
 -- Make framework globally accessible
 _G.APFramework = APFramework
 
