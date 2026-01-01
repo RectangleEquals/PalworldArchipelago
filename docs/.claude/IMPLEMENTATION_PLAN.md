@@ -37,7 +37,7 @@
 - Lua busted (Lua unit tests)
 
 **Dependencies**:
-- lua-apclientpp v0.6.4+ (DLL)
+- apclientpp (C++ library for Archipelago protocol)
 - nlohmann/json (C++ JSON library)
 - Windows SDK (Named Pipes API)
 
@@ -97,6 +97,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Dependencies
 find_package(nlohmann_json REQUIRED)
+find_package(apclientpp REQUIRED)
 
 # Source files
 set(SOURCES
@@ -126,14 +127,8 @@ add_library(APFrameworkCore SHARED ${SOURCES} ${HEADERS})
 target_include_directories(APFrameworkCore PUBLIC include)
 target_link_libraries(APFrameworkCore
     PRIVATE nlohmann_json::nlohmann_json
-    PRIVATE ${CMAKE_SOURCE_DIR}/lib/lua-apclientpp.lib
-)
-
-# Copy lua-apclientpp.dll to output
-add_custom_command(TARGET APFrameworkCore POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-    ${CMAKE_SOURCE_DIR}/lib/lua-apclientpp.dll
-    $<TARGET_FILE_DIR:APFrameworkCore>
+    PRIVATE apclientpp::apclientpp
+    PRIVATE ws2_32  # Windows sockets for networking
 )
 ```
 
@@ -148,8 +143,9 @@ add_custom_command(TARGET APFrameworkCore POST_BUILD
 #include <string>
 #include <functional>
 #include <memory>
+#include <apclientpp/apclientpp.hpp>
 
-// Forward declare lua-apclientpp types (or include header)
+// Internal implementation details
 struct APClientImpl;
 
 struct APMessage {

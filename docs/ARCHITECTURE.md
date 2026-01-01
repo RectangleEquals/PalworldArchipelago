@@ -76,29 +76,27 @@ The framework becomes a **service/daemon** that AP-enabled mods communicate with
 ```
 APFramework/
 ├── Scripts/
-│   ├── main.lua              # Lua entry point (loads C++ core)
-│   ├── APFramework.lua       # Lua wrapper for framework
+│   ├── main.lua              # Minimal Lua entry point (loads C++ core)
+│   ├── APFramework.lua       # Minimal Lua wrapper
 │   └── lib/
-│       ├── APFrameworkCore.dll    # C++ core (AP client + IPC server)
-│       ├── lua-apclientpp.dll     # AP protocol library
-│       └── lunajson/              # JSON parsing
+│       └── APFrameworkCore.dll    # C++ core (everything)
 └── config.json               # Framework configuration
 ```
 
 **Responsibilities**:
-- Load `APFrameworkCore.dll` (C++ library via FFI)
-- Start IPC server (Named Pipes)
-- Auto-discover AP-enabled mods (`ap_config.json` scanning)
-- Connect to Archipelago server
-- Route messages between AP server and mods
-- Manage mod lifecycle (`onInit` callbacks)
+- **Lua Mod** (minimal, ~20 lines):
+  - Load `APFrameworkCore.dll` via FFI
+  - Pass configuration to C++ core
+  - That's it! Everything else is C++
 
 **C++ Core** (`APFrameworkCore.dll`):
-- Integrate lua-apclientpp
+- Integrate **apclientpp** (C++ library, not lua-apclientpp)
 - Run background polling thread
 - Host Named Pipes IPC server
+- Auto-discover AP-enabled mods (`ap_config.json` scanning)
 - Maintain per-mod message queues
 - Route AP messages to appropriate mods
+- **Pure C++** - no Lua dependencies
 
 ### 2. APClientLib (Mod Client Library)
 
