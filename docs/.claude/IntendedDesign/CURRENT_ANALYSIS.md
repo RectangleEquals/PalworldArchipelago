@@ -727,18 +727,27 @@ ue4ss/UE4SS.log
 
 ---
 
-## 9. Lua Client Library JSON Integration
+## 9. Lua JSON Integration (lunajson)
 
 ### 9.1 Intended Design
 
-**Purpose**: Provide seamless JSON encoding/decoding for Lua mod developers using lunajson.
+**Purpose**: Use lunajson throughout the Lua codebase for robust JSON handling.
 
-**API**:
+**Why lunajson?**:
+- Pure Lua implementation (no C dependencies)
+- Handles all valid JSON (nested objects, arrays, escape sequences, unicode)
+- Battle-tested and widely used
+- Already tested successfully in this project
+- Complements `nlohmann/json` in C++ codebase
+
+**Use Cases in APFramework**:
+
+**1. Client Library** ([src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua)):
 ```lua
-local ap_client = require("ap_client")
+local json = require("lunajson")
 local client = ap_client:new("author.game.mod")
 
--- Mods work with Lua tables, not JSON strings
+-- Automatic encoding (Lua table → JSON string)
 client:register({
     items = {
         {id = 100000, name = "Item", classification = "useful"}
@@ -747,38 +756,67 @@ client:register({
         {id = 200000, name = "Location", region = "Region"}
     }
 })
--- ap_client automatically encodes to JSON for IPC
 
--- Receiving
+-- Automatic decoding (JSON string → Lua table)
 client.on_item_received = function(item_data)
-    -- item_data is already a Lua table (auto-decoded from JSON)
     print("Received item ID: " .. item_data.item_id)
 end
 ```
 
-**Integration**:
-- Use `lunajson` library (pure Lua, no dependencies)
-- Automatically encode outgoing messages (Lua table → JSON string)
-- Automatically decode incoming messages (JSON string → Lua table)
-- Zero manual JSON handling by mod developers
+**2. Configuration Management** ([APFramework/Scripts/config.lua](../../APFramework/Scripts/config.lua)):
+```lua
+local json = require("lunajson")
+
+function Config:load(config_path)
+    local file = io.open(config_path, "r")
+    local content = file:read("*a")
+    file:close()
+
+    -- Clean JSON parsing instead of regex
+    local config_data = json.decode(content)
+    self.server = config_data.server or self.server
+    self.port = config_data.port or self.port
+    self.slot_name = config_data.slot_name or self.slot_name
+    self.password = config_data.password or self.password
+    self.autoconnect = config_data.autoconnect or self.autoconnect
+    self.registration_timeout = config_data.registration_timeout or self.registration_timeout
+end
+```
+
+**3. Any Future Lua Components**: Use lunajson for all JSON operations.
 
 ### 9.2 Current Implementation
 
-**Status**: ⚠️ **CUSTOM IMPLEMENTATION (NO lunajson)**
+**Status**: ❌ **NO lunajson - Multiple Custom Implementations**
 
-**What Exists**:
-- ✅ Custom JSON encoder/decoder in [src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua) (lines 8-96)
-- ✅ Auto-encode/decode works for simple cases
+**Problem Areas**:
 
-**What's Missing**:
-- ❌ No `lunajson` integration
-- ⚠️ Custom JSON implementation is fragile (limited features)
+**1. Client Library** ([src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua) lines 8-96):
+- Custom JSON encoder/decoder using regex
+- Limited to simple structures
+- Cannot handle nested arrays/objects properly
+- Cannot handle escape sequences or unicode
 
-**Current Code**:
+**2. Config Management** ([APFramework/Scripts/config.lua](../../APFramework/Scripts/config.lua) lines 31-37):
+- Fragile regex parsing: `content:match('"server"%s*:%s*"([^"]+)"')`
+- Hard-coded for each field
+- Cannot handle nested config objects
+- Breaks on comments or formatting changes
+- **Example of brittleness**: Adding a new config field requires new regex pattern
+
+**Current Code Examples**:
 ```lua
--- ap_client.lua:8-96
--- Custom JSON implementation using string.match and patterns
--- Works for basic objects/arrays but may fail on complex JSON
+-- config.lua:31-37 (FRAGILE)
+self.server = content:match('"server"%s*:%s*"([^"]+)"') or self.server
+self.port = tonumber(content:match('"port"%s*:%s*(%d+)')) or self.port
+self.slot_name = content:match('"slot_name"%s*:%s*"([^"]*)"') or self.slot_name
+self.password = content:match('"password"%s*:%s*"([^"]*)"') or self.password
+self.autoconnect = content:match('"autoconnect"%s*:%s*(true)') ~= nil
+self.registration_timeout = tonumber(content:match('"registration_timeout"%s*:%s*(%d+)')) or self.registration_timeout
+
+-- ap_client.lua:8-96 (FRAGILE)
+-- Custom JSON implementation using string.match patterns
+-- Cannot handle complex JSON structures
 ```
 
 ### 9.3 Gap Analysis
@@ -786,17 +824,33 @@ end
 | Feature | Intended | Current | Status |
 |---------|----------|---------|--------|
 | lunajson library | Required | Not included | ❌ **Missing** |
-| Auto-encode Lua tables | Required | Custom impl works | ⚠️ **Partial** |
-| Auto-decode JSON strings | Required | Custom impl works | ⚠️ **Partial** |
-| Robust JSON handling | Required | Limited | ⚠️ **Fragile** |
+| Client lib JSON | lunajson | Custom regex | ❌ **Fragile** |
+| Config JSON parsing | lunajson | Regex patterns | ❌ **Fragile** |
+| Robust encoding/decoding | Required | Limited | ❌ **Incomplete** |
+| Nested structures | Supported | Breaks | ❌ **Broken** |
+| Unicode/escapes | Supported | Not handled | ❌ **Missing** |
 
-**Impact**: Complex JSON structures may fail to parse/encode. Mods with nested data or special characters may encounter issues.
+**Impact**:
+- Complex mod capabilities fail to serialize
+- Config files with nested objects break
+- Mods with unicode characters in names/descriptions fail
+- Difficult to debug (silent failures or cryptic errors)
+- Maintenance burden (custom code vs proven library)
 
 **Files to Modify**:
-- [src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua) - Replace custom JSON with lunajson
-- Add `lunajson.lua` to project
+1. Add `lunajson.lua` (or `lunajson/` directory) to project
+2. [src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua) - Replace lines 8-96 with lunajson
+3. [APFramework/Scripts/config.lua](../../APFramework/Scripts/config.lua) - Replace lines 31-37 with lunajson
+4. Update any other Lua files that parse/generate JSON
 
-**Implementation Priority**: 🟡 **MEDIUM** - Phase 2
+**Benefits of lunajson**:
+- ✅ Handles ALL valid JSON (proven library)
+- ✅ Cleaner code (remove hundreds of lines of regex)
+- ✅ Easier maintenance (update library, not custom code)
+- ✅ Better error messages (library provides detailed parse errors)
+- ✅ Future-proof (can handle schema changes without code changes)
+
+**Implementation Priority**: 🟡 **HIGH** - Phase 1 or 2 (bundled with client lib work)
 
 ---
 

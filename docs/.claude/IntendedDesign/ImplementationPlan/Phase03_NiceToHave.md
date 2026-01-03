@@ -1,84 +1,83 @@
 # Phase 3: Nice-to-Have Enhancements - Implementation Plan
 
-**Phase**: 3 of 3
-**Priority**: 🟢 Nice-to-Have
-**Duration**: 3-4 days (18-25 hours)
-**Status**: Ready after Phase 2 completion
-**Dependencies**: Phase 1 (metadata schema), Phase 2 (validation foundation)
+**Document Version**: 1.0
+**Date**: 2026-01-02
+**Status**: Future Work (Post-Release)
+**Parent Document**: [REDESIGN_PLAN_OVERVIEW.md](../REDESIGN_PLAN_OVERVIEW.md)
+**Previous Phase**: [Phase02_ValidationPolish.md](Phase02_ValidationPolish.md)
 
 ---
 
 ## Overview
 
-Phase 3 implements advanced features that enhance system maturity and robustness. These features are not critical for initial release but provide significant long-term value.
+Phase 3 implements **advanced features** for long-term ecosystem maturity. These features improve user experience and system robustness but are not critical for the initial production release. They can be implemented after beta testing based on community feedback.
 
-### Goals
+**Total Estimated Time**: 18-25 hours (3-4 days)
 
-1. **Compatibility**: Runtime version validation and incompatibility checking
-2. **Flexibility**: Static library build option for C++ mods
-3. **Robustness**: Advanced error handling and recovery mechanisms
+**Status**: Optional - implement based on community needs and feedback
 
-### Success Criteria
+---
 
-- [ ] Framework warns about version incompatibilities at startup
-- [ ] Static .lib available for C++ mods (no DLL deployment required)
-- [ ] Transient connection failures automatically recover
-- [ ] Error messages include actionable suggestions
-- [ ] All features thoroughly tested
-- [ ] Complete documentation
+## Feature Roadmap
+
+### Implementation Order
+
+1. **Semantic version validation** (8-10 hours) → Runtime version warnings
+2. **Static .lib build option** (2-3 hours) → C++ mod convenience
+3. **Advanced error handling** (8-12 hours) → Retry logic, recovery
 
 ---
 
 ## Feature 3.1: Semantic Version Validation
 
+**Priority**: 1st (Most Valuable)
+**Estimate**: 8-10 hours
+**Dependencies**: Phase 1 (mod metadata with versions)
+
 ### Problem Statement
 
-**Current State**: Version fields exist but not validated at runtime.
+**Current**: Version comparison uses simple string comparison, which is incorrect for semantic versions.
 
-**Intended Design**: Runtime checking of:
-- Mod version compatibility with game version
-- Mod version compatibility with other mods (incompatible_mods)
-- Framework version compatibility
+**Issues**:
+- `"1.10.0" < "1.2.0"` (string comparison) → WRONG
+- `"1.10.0" > "1.2.0"` (semantic comparison) → CORRECT
+- Version ranges like `">=1.0.0 <2.0.0"` not parsed correctly
+- Game version compatibility (`supported_game_versions`) not validated
+- No warnings for version mismatches (silent failures)
 
-**Impact**: Mods may break silently on game updates or conflict with each other.
+### Solution
 
-### Solution Design
+Implement **semantic versioning (semver)** parsing and validation:
 
-#### Semantic Versioning Specification
-
-**Format**: `MAJOR.MINOR.PATCH` (e.g., `1.2.3`)
+**Semver Format**: `MAJOR.MINOR.PATCH` (e.g., `"1.2.3"`)
 
 **Version Ranges**:
-- `*` - Any version
-- `1.2.3` - Exact version
-- `>=1.0.0` - Greater than or equal
-- `<2.0.0` - Less than
-- `>=1.0.0 <2.0.0` - Range (combined)
-- `^1.2.3` - Compatible with (>= 1.2.3, < 2.0.0)
-- `~1.2.3` - Approximately (>= 1.2.3, < 1.3.0)
+- `">=1.0.0"` - Greater than or equal to 1.0.0
+- `"<2.0.0"` - Less than 2.0.0
+- `">=1.0.0 <2.0.0"` - Range: 1.0.0 to 2.0.0 (exclusive)
+- `"^1.2.3"` - Compatible with 1.2.3 (>= 1.2.3, < 2.0.0)
+- `"~1.2.3"` - Approximately 1.2.3 (>= 1.2.3, < 1.3.0)
 
-#### Validation Rules
-
-1. **Mod Version**: Must be valid semver (`X.Y.Z`)
-2. **Game Version**: Check against `supported_game_versions` range
-3. **Incompatible Mods**: Check registered mods against `incompatible_mods` list
-4. **Framework Version**: Optional, check minimum required framework version
-
-#### Warning vs Error
-
-- **WARNING**: Version mismatch (log, allow to proceed)
-- **ERROR**: Invalid version format (reject mod)
+**Validation**:
+- Parse all mod versions into semver format
+- Check dependency version constraints
+- Check incompatibility version constraints
+- Check game version compatibility (`supported_game_versions`)
+- **Warn** (don't block) on mismatches
 
 ### Implementation Steps
 
-#### Step 1: Implement Semver Parser (4 hours)
+#### Step 1: Create Semver Utility
 
-**File**: [src/framework_core/include/semver.h](../../../src/framework_core/include/semver.h)
+**File**: [src/framework_core/include/semver.h](../../../../src/framework_core/include/semver.h)
 
 ```cpp
-#pragma once
+#ifndef SEMVER_H
+#define SEMVER_H
+
 #include <string>
 #include <regex>
+#include <optional>
 
 class SemanticVersion {
 public:
@@ -86,70 +85,68 @@ public:
     int minor;
     int patch;
 
-    SemanticVersion() : major(0), minor(0), patch(0) {}
     SemanticVersion(int maj, int min, int pat) : major(maj), minor(min), patch(pat) {}
 
-    // Parse from string "1.2.3"
-    static bool parse(const std::string& version_str, SemanticVersion& out);
+    // Parse version string "1.2.3"
+    static std::optional<SemanticVersion> parse(const std::string& version_str);
 
     // Comparison operators
-    bool operator==(const SemanticVersion& other) const;
-    bool operator!=(const SemanticVersion& other) const;
     bool operator<(const SemanticVersion& other) const;
-    bool operator<=(const SemanticVersion& other) const;
     bool operator>(const SemanticVersion& other) const;
+    bool operator<=(const SemanticVersion& other) const;
     bool operator>=(const SemanticVersion& other) const;
+    bool operator==(const SemanticVersion& other) const;
 
-    // String representation
     std::string to_string() const;
 };
 
-class VersionRange {
+class VersionConstraint {
 public:
-    // Parse range string ">=1.0.0 <2.0.0"
-    static bool parse(const std::string& range_str, VersionRange& out);
+    enum Operator {
+        LESS_THAN,           // <
+        LESS_THAN_EQUAL,     // <=
+        GREATER_THAN,        // >
+        GREATER_THAN_EQUAL,  // >=
+        EQUAL,               // =
+        CARET,               // ^ (compatible with)
+        TILDE                // ~ (approximately)
+    };
 
-    // Check if version satisfies range
-    bool satisfies(const SemanticVersion& version) const;
-
-    // String representation
-    std::string to_string() const;
-
-private:
     struct Constraint {
-        enum Op { EQ, NE, LT, LE, GT, GE };
-        Op op;
+        Operator op;
         SemanticVersion version;
     };
 
-    std::vector<Constraint> constraints_;
+    std::vector<Constraint> constraints;
+
+    // Parse constraint string ">=1.0.0 <2.0.0"
+    static std::optional<VersionConstraint> parse(const std::string& constraint_str);
+
+    // Check if version satisfies constraint
+    bool is_satisfied_by(const SemanticVersion& version) const;
 };
+
+#endif // SEMVER_H
 ```
 
-**File**: [src/framework_core/src/semver.cpp](../../../src/framework_core/src/semver.cpp)
+**File**: [src/framework_core/src/semver.cpp](../../../../src/framework_core/src/semver.cpp)
 
 ```cpp
 #include "semver.h"
 #include <sstream>
 
-bool SemanticVersion::parse(const std::string& version_str, SemanticVersion& out) {
-    // Regex: X.Y.Z where X, Y, Z are integers
-    std::regex version_regex(R"(^(\d+)\.(\d+)\.(\d+)$)");
+std::optional<SemanticVersion> SemanticVersion::parse(const std::string& version_str) {
+    std::regex version_regex(R"((\d+)\.(\d+)\.(\d+))");
     std::smatch match;
 
-    if (!std::regex_match(version_str, match, version_regex)) {
-        return false;
+    if (std::regex_match(version_str, match, version_regex)) {
+        int major = std::stoi(match[1]);
+        int minor = std::stoi(match[2]);
+        int patch = std::stoi(match[3]);
+        return SemanticVersion(major, minor, patch);
     }
 
-    out.major = std::stoi(match[1].str());
-    out.minor = std::stoi(match[2].str());
-    out.patch = std::stoi(match[3].str());
-
-    return true;
-}
-
-bool SemanticVersion::operator==(const SemanticVersion& other) const {
-    return major == other.major && minor == other.minor && patch == other.patch;
+    return std::nullopt;
 }
 
 bool SemanticVersion::operator<(const SemanticVersion& other) const {
@@ -158,936 +155,641 @@ bool SemanticVersion::operator<(const SemanticVersion& other) const {
     return patch < other.patch;
 }
 
-// Implement other operators...
+bool SemanticVersion::operator>(const SemanticVersion& other) const {
+    return other < *this;
+}
+
+bool SemanticVersion::operator<=(const SemanticVersion& other) const {
+    return !(other < *this);
+}
+
+bool SemanticVersion::operator>=(const SemanticVersion& other) const {
+    return !(*this < other);
+}
+
+bool SemanticVersion::operator==(const SemanticVersion& other) const {
+    return major == other.major && minor == other.minor && patch == other.patch;
+}
 
 std::string SemanticVersion::to_string() const {
     return std::to_string(major) + "." + std::to_string(minor) + "." + std::to_string(patch);
 }
 
-bool VersionRange::parse(const std::string& range_str, VersionRange& out) {
-    // Handle special cases
-    if (range_str == "*" || range_str.empty()) {
-        // Match any version (no constraints)
-        return true;
-    }
+std::optional<VersionConstraint> VersionConstraint::parse(const std::string& constraint_str) {
+    VersionConstraint result;
 
-    // Handle caret (^1.2.3 means >=1.2.3 <2.0.0)
-    if (range_str[0] == '^') {
-        SemanticVersion base;
-        if (!SemanticVersion::parse(range_str.substr(1), base)) {
-            return false;
-        }
+    // Parse constraints like ">=1.0.0 <2.0.0"
+    std::regex constraint_regex(R"((>=|<=|>|<|=|\^|~)\s*(\d+\.\d+\.\d+))");
+    std::smatch match;
 
-        // >=base
-        out.constraints_.push_back({Constraint::GE, base});
+    std::string str = constraint_str;
+    while (std::regex_search(str, match, constraint_regex)) {
+        std::string op_str = match[1];
+        std::string version_str = match[2];
 
-        // <next_major.0.0
-        SemanticVersion upper(base.major + 1, 0, 0);
-        out.constraints_.push_back({Constraint::LT, upper});
+        auto version = SemanticVersion::parse(version_str);
+        if (!version) return std::nullopt;
 
-        return true;
-    }
-
-    // Handle tilde (~1.2.3 means >=1.2.3 <1.3.0)
-    if (range_str[0] == '~') {
-        SemanticVersion base;
-        if (!SemanticVersion::parse(range_str.substr(1), base)) {
-            return false;
-        }
-
-        // >=base
-        out.constraints_.push_back({Constraint::GE, base});
-
-        // <next_minor.0
-        SemanticVersion upper(base.major, base.minor + 1, 0);
-        out.constraints_.push_back({Constraint::LT, upper});
-
-        return true;
-    }
-
-    // Parse complex ranges: ">=1.0.0 <2.0.0"
-    std::istringstream ss(range_str);
-    std::string token;
-
-    while (ss >> token) {
         Constraint constraint;
+        constraint.version = *version;
 
-        // Parse operator
-        if (token.substr(0, 2) == ">=") {
-            constraint.op = Constraint::GE;
-            token = token.substr(2);
-        } else if (token.substr(0, 2) == "<=") {
-            constraint.op = Constraint::LE;
-            token = token.substr(2);
-        } else if (token.substr(0, 2) == "!=") {
-            constraint.op = Constraint::NE;
-            token = token.substr(2);
-        } else if (token[0] == '>') {
-            constraint.op = Constraint::GT;
-            token = token.substr(1);
-        } else if (token[0] == '<') {
-            constraint.op = Constraint::LT;
-            token = token.substr(1);
-        } else if (token[0] == '=') {
-            constraint.op = Constraint::EQ;
-            token = token.substr(1);
-        } else {
-            // No operator, assume exact match
-            constraint.op = Constraint::EQ;
-        }
+        if (op_str == ">=") constraint.op = GREATER_THAN_EQUAL;
+        else if (op_str == "<=") constraint.op = LESS_THAN_EQUAL;
+        else if (op_str == ">") constraint.op = GREATER_THAN;
+        else if (op_str == "<") constraint.op = LESS_THAN;
+        else if (op_str == "=") constraint.op = EQUAL;
+        else if (op_str == "^") constraint.op = CARET;
+        else if (op_str == "~") constraint.op = TILDE;
+        else return std::nullopt;
 
-        // Parse version
-        if (!SemanticVersion::parse(token, constraint.version)) {
-            return false;
-        }
+        result.constraints.push_back(constraint);
 
-        out.constraints_.push_back(constraint);
-    }
-
-    return !out.constraints_.empty();
-}
-
-bool VersionRange::satisfies(const SemanticVersion& version) const {
-    // No constraints means match any
-    if (constraints_.empty()) {
-        return true;
-    }
-
-    // All constraints must be satisfied
-    for (const auto& constraint : constraints_) {
-        bool satisfied = false;
-
-        switch (constraint.op) {
-            case Constraint::EQ: satisfied = (version == constraint.version); break;
-            case Constraint::NE: satisfied = (version != constraint.version); break;
-            case Constraint::LT: satisfied = (version < constraint.version); break;
-            case Constraint::LE: satisfied = (version <= constraint.version); break;
-            case Constraint::GT: satisfied = (version > constraint.version); break;
-            case Constraint::GE: satisfied = (version >= constraint.version); break;
-        }
-
-        if (!satisfied) {
-            return false;  // At least one constraint failed
-        }
-    }
-
-    return true;  // All constraints satisfied
-}
-
-std::string VersionRange::to_string() const {
-    if (constraints_.empty()) {
-        return "*";
-    }
-
-    std::string result;
-    for (size_t i = 0; i < constraints_.size(); i++) {
-        if (i > 0) result += " ";
-
-        const auto& c = constraints_[i];
-        switch (c.op) {
-            case Constraint::EQ: result += "="; break;
-            case Constraint::NE: result += "!="; break;
-            case Constraint::LT: result += "<"; break;
-            case Constraint::LE: result += "<="; break;
-            case Constraint::GT: result += ">"; break;
-            case Constraint::GE: result += ">="; break;
-        }
-
-        result += c.version.to_string();
+        str = match.suffix();
     }
 
     return result;
 }
+
+bool VersionConstraint::is_satisfied_by(const SemanticVersion& version) const {
+    for (const auto& constraint : constraints) {
+        bool satisfied = false;
+
+        switch (constraint.op) {
+            case LESS_THAN:
+                satisfied = version < constraint.version;
+                break;
+            case LESS_THAN_EQUAL:
+                satisfied = version <= constraint.version;
+                break;
+            case GREATER_THAN:
+                satisfied = version > constraint.version;
+                break;
+            case GREATER_THAN_EQUAL:
+                satisfied = version >= constraint.version;
+                break;
+            case EQUAL:
+                satisfied = version == constraint.version;
+                break;
+            case CARET:  // ^1.2.3 → >=1.2.3 <2.0.0
+                satisfied = version >= constraint.version &&
+                           version.major == constraint.version.major;
+                break;
+            case TILDE:  // ~1.2.3 → >=1.2.3 <1.3.0
+                satisfied = version >= constraint.version &&
+                           version.major == constraint.version.major &&
+                           version.minor == constraint.version.minor;
+                break;
+        }
+
+        if (!satisfied) return false;
+    }
+
+    return true;
+}
 ```
 
-#### Step 2: Add Validation Logic (3 hours)
+**Estimate**: 4 hours
 
-**File**: [src/framework_core/src/mod_registry.cpp](../../../src/framework_core/src/mod_registry.cpp)
+---
 
-**Add Method**:
+#### Step 2: Update Version Validation
+
+**File**: [src/framework_core/src/mod_registry.cpp](../../../../src/framework_core/src/mod_registry.cpp)
+
+**Update VersionRange::is_satisfied_by()**:
 ```cpp
-void ModRegistry::validate_versions(const std::string& current_game_version) {
-    SemanticVersion game_version;
-    if (!SemanticVersion::parse(current_game_version, game_version)) {
-        LOG_WARNING("Invalid game version format: {}", current_game_version);
+#include "semver.h"
+
+bool VersionRange::is_satisfied_by(const std::string& version_str) const {
+    if (any_version) {
+        return true;
+    }
+
+    // Parse version
+    auto version = SemanticVersion::parse(version_str);
+    if (!version) {
+        LOG_WARNING("Invalid version format: " + version_str);
+        return false;  // Invalid version, fail validation
+    }
+
+    // Build constraint string
+    std::string constraint_str = "";
+    if (!min_version.empty()) {
+        constraint_str += ">=" + min_version;
+    }
+    if (!max_version.empty()) {
+        if (!constraint_str.empty()) constraint_str += " ";
+        constraint_str += "<=" + max_version;
+    }
+
+    if (constraint_str.empty()) {
+        return true;  // No constraints
+    }
+
+    // Parse and check constraint
+    auto constraint = VersionConstraint::parse(constraint_str);
+    if (!constraint) {
+        LOG_WARNING("Invalid version constraint: " + constraint_str);
+        return true;  // Invalid constraint, allow by default
+    }
+
+    return constraint->is_satisfied_by(*version);
+}
+```
+
+**Estimate**: 1 hour
+
+---
+
+#### Step 3: Add Game Version Validation
+
+**File**: [src/framework_core/src/mod_registry.cpp](../../../../src/framework_core/src/mod_registry.cpp)
+
+**Add validation**:
+```cpp
+void ModRegistry::validate_game_versions(const std::string& current_game_version) {
+    LOG_INFO("Validating mod game version compatibility...");
+
+    auto game_version = SemanticVersion::parse(current_game_version);
+    if (!game_version) {
+        LOG_WARNING("Invalid game version format: " + current_game_version);
         return;
     }
 
-    LOG_INFO("Validating mod versions against game version {}", current_game_version);
+    for (const auto& [mod_id, metadata] : discovered_mods_) {
+        if (!metadata.enabled) continue;
 
-    // Check each registered mod
-    for (const auto& [mod_id, metadata] : discovered_mods_metadata_) {
-        // Validate mod version format
-        SemanticVersion mod_version;
-        if (!SemanticVersion::parse(metadata.version, mod_version)) {
-            LOG_WARNING("Mod {} has invalid version format: {}",
-                        metadata.display_name, metadata.version);
+        if (metadata.supported_game_versions.empty()) {
+            continue;  // No constraint specified
+        }
+
+        // Parse game version constraint
+        auto constraint = VersionConstraint::parse(metadata.supported_game_versions);
+        if (!constraint) {
+            LOG_WARNING("Mod '" + mod_id + "' has invalid game version constraint: " +
+                       metadata.supported_game_versions);
             continue;
         }
 
-        // Check game version compatibility
-        VersionRange game_range;
-        if (VersionRange::parse(metadata.supported_game_versions, game_range)) {
-            if (!game_range.satisfies(game_version)) {
-                LOG_WARNING("Mod {} v{} may not be compatible with game version {}",
-                            metadata.display_name,
-                            metadata.version,
-                            current_game_version);
-                LOG_WARNING("  Supported game versions: {}",
-                            metadata.supported_game_versions);
-            } else {
-                LOG_DEBUG("Mod {} v{} compatible with game version {}",
-                          metadata.display_name,
-                          metadata.version,
-                          current_game_version);
-            }
-        }
-
-        // Check incompatible mods
-        check_incompatibilities(mod_id, metadata);
-    }
-}
-
-void ModRegistry::check_incompatibilities(
-    const std::string& mod_id,
-    const ModMetadata& metadata)
-{
-    for (const auto& incomp : metadata.incompatible_mods) {
-        // Check if incompatible mod is registered
-        if (discovered_mods_.count(incomp.mod_id) == 0) {
-            continue;  // Not present, no conflict
-        }
-
-        // Get other mod's metadata
-        const auto& other_metadata = discovered_mods_metadata_[incomp.mod_id];
-
-        // Parse other mod's version
-        SemanticVersion other_version;
-        if (!SemanticVersion::parse(other_metadata.version, other_version)) {
-            continue;  // Can't validate, skip
-        }
-
-        // Parse incompatibility version range
-        VersionRange incomp_range;
-        if (!VersionRange::parse(incomp.versions, incomp_range)) {
-            continue;  // Invalid range, skip
-        }
-
-        // Check if conflict exists
-        if (incomp_range.satisfies(other_version)) {
-            LOG_WARNING("INCOMPATIBILITY DETECTED:");
-            LOG_WARNING("  Mod: {} v{}",
-                        metadata.display_name, metadata.version);
-            LOG_WARNING("  Conflicts with: {} v{}",
-                        other_metadata.display_name, other_metadata.version);
-            if (!incomp.reason.empty()) {
-                LOG_WARNING("  Reason: {}", incomp.reason);
-            }
-            LOG_WARNING("  This may cause crashes or unexpected behavior!");
+        // Check compatibility
+        if (!constraint->is_satisfied_by(*game_version)) {
+            LOG_WARNING("Mod '" + mod_id + "' may not be compatible with game version " +
+                       current_game_version + " (expects: " + metadata.supported_game_versions + ")");
+            // Don't disable, just warn
         }
     }
 }
 ```
 
-#### Step 3: Call Validation at Startup (1 hour)
-
-**File**: [src/framework_core/src/framework_core.cpp](../../../src/framework_core/src/framework_core.cpp)
-
-**Add to State Machine** (after discovery):
+**Call in framework initialization**:
 ```cpp
-void FrameworkCore::on_all_mods_registered() {
-    // Existing: Generate capabilities
-    generate_capabilities();
-
-    // NEW: Validate versions
-    std::string game_version = get_game_version();  // Implement this
-    mod_registry_->validate_versions(game_version);
-
-    // Broadcast registration complete...
-}
-
-std::string FrameworkCore::get_game_version() {
-    // TODO: Detect actual game version
-    // For now, return from config or hardcoded
-    return config_manager_->get_game_version();
+void FrameworkCore::initialize(const std::string& game_version) {
+    // ...
+    mod_registry_->discover_mods("Mods");
+    mod_registry_->validate_dependencies();
+    mod_registry_->detect_incompatibilities();
+    mod_registry_->validate_game_versions(game_version);  // NEW
+    // ...
 }
 ```
 
-**Add to Config**:
-```json
-{
-  "game_version": "0.3.5",
-  // ... other config
-}
-```
+**Estimate**: 2 hours
 
-### Testing Plan
+---
+
+#### Step 4: Testing
 
 **Test Cases**:
 
-| Mod Version | Game Version | Supported Range | Expected |
-|-------------|--------------|-----------------|----------|
-| `1.0.0` | `0.3.5` | `>=0.3.0 <0.4.0` | ✅ Compatible |
-| `1.0.0` | `0.4.0` | `>=0.3.0 <0.4.0` | ⚠️ Warning |
-| `1.0.0` | `0.2.0` | `>=0.3.0 <0.4.0` | ⚠️ Warning |
-| `1.0.0` | `0.3.5` | `^0.3.0` | ✅ Compatible |
-| `1.0.0` | `0.4.0` | `^0.3.0` | ⚠️ Warning |
+1. **Valid semver**: `"1.2.3"` → parsed correctly
+2. **Version comparison**: `"1.10.0" > "1.2.0"` → TRUE (correct)
+3. **Range constraint**: `">=1.0.0 <2.0.0"` with version `"1.5.0"` → satisfied
+4. **Caret constraint**: `"^1.2.3"` with version `"1.3.0"` → satisfied, with `"2.0.0"` → not satisfied
+5. **Tilde constraint**: `"~1.2.3"` with version `"1.2.5"` → satisfied, with `"1.3.0"` → not satisfied
+6. **Game version warning**: Mod requires game `">=0.3.0"`, game is `"0.2.5"` → warning logged
 
-**Incompatibility Test**:
-```json
-// Mod A
-{
-  "mod_id": "author.game.modA",
-  "version": "1.0.0",
-  "incompatible_mods": [
-    {"mod_id": "author.game.modB", "versions": ">=2.0.0", "reason": "Both modify same systems"}
-  ]
-}
+**Estimate**: 1-2 hours
 
-// Mod B
-{
-  "mod_id": "author.game.modB",
-  "version": "2.1.0"
-}
-```
+---
 
-Expected: Warning logged about incompatibility.
+### Files Modified
+
+- [src/framework_core/include/semver.h](../../../../src/framework_core/include/semver.h) - **NEW**
+- [src/framework_core/src/semver.cpp](../../../../src/framework_core/src/semver.cpp) - **NEW**
+- [src/framework_core/src/mod_registry.cpp](../../../../src/framework_core/src/mod_registry.cpp) - **MODERATE**
+
+**Estimated Lines Changed**: ~400-500 lines (mostly new semver utility)
+
+---
+
+### Success Criteria
+
+- [ ] Semantic version parsing works correctly
+- [ ] Version comparison uses semver (not string comparison)
+- [ ] Version constraints parsed and validated
+- [ ] Game version compatibility checked
+- [ ] Warnings logged for version mismatches
+- [ ] Caret (^) and tilde (~) operators work
 
 ---
 
 ## Feature 3.2: Static .lib Build Option
 
+**Priority**: 2nd (Convenience)
+**Estimate**: 2-3 hours
+**Dependencies**: None
+
 ### Problem Statement
 
-**Current State**: APClientLib is DLL-only, requires deployment with mods.
+**Current**: Client library only builds as DLL (`APClientLib.dll`). C++ mods must:
+1. Link against the DLL import library
+2. Deploy the DLL alongside their mod
+3. Ensure DLL is in correct location at runtime
 
-**Intended Design**: Provide static library option for simpler C++ mod deployment.
+**Inconvenience**: Extra deployment step, potential DLL versioning issues.
 
-**Impact**: C++ mods must distribute APClientLib.dll alongside their own DLL.
+### Solution
 
-### Solution Design
+Provide **static library build option** (`APClientLib.lib`):
 
-#### Build Options
+**Benefits**:
+- No DLL deployment required
+- Mod binary is self-contained
+- No runtime DLL loading issues
+- Simpler deployment for C++ mod developers
 
-- **Dynamic Library** (default): `APClientLib.dll` (shared runtime)
-- **Static Library** (optional): `APClientLib.lib` (linked into mod DLL)
-
-#### CMake Configuration
-
-```bash
-# Build dynamic (default)
-cmake -B build
-
-# Build static
-cmake -B build -DBUILD_STATIC_CLIENT_LIB=ON
-
-# Build both
-cmake -B build -DBUILD_BOTH_CLIENT_LIBS=ON
-```
+**Trade-offs**:
+- Larger binary size (library code embedded)
+- Each mod has its own copy of library code
 
 ### Implementation Steps
 
-#### Step 1: Update CMakeLists.txt (2 hours)
+#### Step 1: Add CMake Option
 
-**File**: [src/client_lib/CMakeLists.txt](../../../src/client_lib/src/client_lib/CMakeLists.txt)
+**File**: [src/client_lib/CMakeLists.txt](../../../../src/client_lib/CMakeLists.txt)
 
+**Current**:
 ```cmake
-# Option to build static library
-option(BUILD_STATIC_CLIENT_LIB "Build static library instead of DLL" OFF)
-option(BUILD_BOTH_CLIENT_LIBS "Build both static and dynamic libraries" OFF)
-
-# Source files
-set(CLIENT_LIB_SOURCES
+# Build shared library (DLL)
+add_library(APClientLib SHARED
     src/ap_client_lib.cpp
     src/ipc_client.cpp
+    # ...
 )
-
-set(CLIENT_LIB_HEADERS
-    include/ap_client_lib.h
-    include/ipc_client.h
-)
-
-if(BUILD_BOTH_CLIENT_LIBS OR BUILD_STATIC_CLIENT_LIB)
-    # Build static library
-    add_library(APClientLib_static STATIC
-        ${CLIENT_LIB_SOURCES}
-        ${CLIENT_LIB_HEADERS}
-    )
-
-    target_include_directories(APClientLib_static PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/third_party/nlohmann
-    )
-
-    target_link_libraries(APClientLib_static PUBLIC
-        ws2_32
-    )
-
-    # Output name without _static suffix
-    set_target_properties(APClientLib_static PROPERTIES
-        OUTPUT_NAME APClientLib
-        ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/lib/Release
-    )
-
-    # Install
-    install(TARGETS APClientLib_static
-            ARCHIVE DESTINATION lib)
-endif()
-
-if(BUILD_BOTH_CLIENT_LIBS OR NOT BUILD_STATIC_CLIENT_LIB)
-    # Build dynamic library (default)
-    add_library(APClientLib SHARED
-        ${CLIENT_LIB_SOURCES}
-        ${CLIENT_LIB_HEADERS}
-    )
-
-    target_include_directories(APClientLib PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/third_party/nlohmann
-    )
-
-    target_link_libraries(APClientLib PUBLIC
-        ws2_32
-    )
-
-    target_compile_definitions(APClientLib PRIVATE
-        APCLIENT_EXPORTS  # Export symbols
-    )
-
-    set_target_properties(APClientLib PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin/Release
-    )
-
-    # Install
-    install(TARGETS APClientLib
-            RUNTIME DESTINATION bin
-            LIBRARY DESTINATION lib)
-endif()
-
-# Always install headers
-install(FILES ${CLIENT_LIB_HEADERS} DESTINATION include)
 ```
 
-#### Step 2: Update Header for Static Build (30 min)
+**Update**:
+```cmake
+# Option to build static library
+option(BUILD_STATIC_CLIENT_LIB "Build static library in addition to shared library" ON)
 
-**File**: [src/client_lib/include/ap_client_lib.h](../../../src/client_lib/include/ap_client_lib.h)
+# Build shared library (DLL)
+add_library(APClientLib SHARED
+    src/ap_client_lib.cpp
+    src/ipc_client.cpp
+    # ...
+)
 
-```cpp
-#pragma once
+# Build static library (optional)
+if(BUILD_STATIC_CLIENT_LIB)
+    add_library(APClientLibStatic STATIC
+        src/ap_client_lib.cpp
+        src/ipc_client.cpp
+        # ...
+    )
 
-// DLL export/import macros
-#ifdef _WIN32
-    #ifdef APCLIENT_EXPORTS
-        #define APCLIENT_API __declspec(dllexport)
-    #elif defined(APCLIENT_STATIC)
-        #define APCLIENT_API  // No export for static
-    #else
-        #define APCLIENT_API __declspec(dllimport)
-    #endif
-#else
-    #define APCLIENT_API
-#endif
+    # Set output name to avoid confusion
+    set_target_properties(APClientLibStatic PROPERTIES
+        OUTPUT_NAME "APClientLib_static"
+    )
 
-// Rest of API...
+    # Install static library
+    install(TARGETS APClientLibStatic
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+    )
+endif()
 ```
 
-#### Step 3: Document Usage (1 hour)
+**Estimate**: 1 hour
 
-**File**: [docs/BUILDING_CPP_MODS.md](../../../docs/BUILDING_CPP_MODS.md)
+---
 
+#### Step 2: Update Documentation
+
+**File**: [README.md](../../../../README.md)
+
+**Add section**:
 ```markdown
-# Building C++ Mods with APClientLib
+## Building
 
-## Option 1: Dynamic Library (DLL)
+### Client Library Build Options
 
-**Pros**: Smaller mod DLL, shared runtime
-**Cons**: Must distribute APClientLib.dll with mod
+The client library can be built as:
+1. **Shared library** (DLL): `APClientLib.dll` (default)
+2. **Static library**: `APClientLib_static.lib` (optional)
 
-**CMakeLists.txt**:
-```cmake
-# Link against shared library
-target_link_libraries(MyMod PRIVATE
-    APClientLib
-)
-```
-
-**Deployment**:
-```
-ue4ss/Mods/MyMod/
-├── MyMod.dll
-├── APClientLib.dll  ← Must include
-└── ap_config.json
-```
-
-## Option 2: Static Library (.lib)
-
-**Pros**: Single DLL, no extra files
-**Cons**: Larger mod DLL
-
-**Build APClientLib**:
+To build both:
 ```bash
-cmake -B build -DBUILD_STATIC_CLIENT_LIB=ON
-cmake --build build --config Release
+cmake -DBUILD_STATIC_CLIENT_LIB=ON ..
+cmake --build .
 ```
 
-**CMakeLists.txt**:
+### Using the Client Library in Your Mod
+
+**Option 1: Shared Library (DLL)**
+- Link against `APClientLib.lib` (import library)
+- Deploy `APClientLib.dll` alongside your mod
+
+**Option 2: Static Library**
+- Link against `APClientLib_static.lib`
+- No DLL deployment needed (code embedded in your mod)
+
+**Example CMakeLists.txt**:
 ```cmake
-# Link against static library
-target_compile_definitions(MyMod PRIVATE APCLIENT_STATIC)
-target_link_libraries(MyMod PRIVATE
-    APClientLib_static  # Note: _static suffix
-)
+# Using shared library (DLL)
+target_link_libraries(YourMod PRIVATE APClientLib)
+
+# OR using static library
+target_link_libraries(YourMod PRIVATE APClientLib_static)
+```
 ```
 
-**Deployment**:
-```
-ue4ss/Mods/MyMod/
-├── MyMod.dll  ← APClientLib code included
-└── ap_config.json
-```
+**Estimate**: 30 minutes
 
-## Recommended Approach
+---
 
-Use **static library** for simpler deployment. Users only need your mod DLL.
-```
+#### Step 3: Testing
 
-### Testing Plan
-
-**Build Test**:
+**Test**:
 1. Build with `BUILD_STATIC_CLIENT_LIB=ON`
-2. Verify `APClientLib.lib` created in `lib/Release/`
-3. Build example mod linking static lib
-4. Verify example mod DLL doesn't require APClientLib.dll
+2. Verify `APClientLib_static.lib` generated
+3. Create test C++ mod using static library
+4. Verify mod works without DLL
 
-**Runtime Test**:
-1. Deploy static-linked mod without APClientLib.dll
-2. Launch game
-3. Verify mod works correctly
-4. Compare DLL sizes (static-linked should be larger)
+**Estimate**: 30 minutes
+
+---
+
+### Files Modified
+
+- [src/client_lib/CMakeLists.txt](../../../../src/client_lib/CMakeLists.txt) - **MINOR**
+- [README.md](../../../../README.md) - **MINOR**
+
+**Estimated Lines Changed**: ~20-30 lines
+
+---
+
+### Success Criteria
+
+- [ ] Static library build option available
+- [ ] Both DLL and static .lib build successfully
+- [ ] Documentation updated with usage instructions
+- [ ] Test mod using static library works
 
 ---
 
 ## Feature 3.3: Advanced Error Handling
 
+**Priority**: 3rd (Robustness)
+**Estimate**: 8-12 hours
+**Dependencies**: None
+
 ### Problem Statement
 
-**Current State**: Many operations fail silently or just log errors.
+**Current**: Many error paths just log and return. No retry logic or recovery mechanisms.
 
-**Intended Design**: Robust error handling with recovery:
-- Automatic reconnection on IPC disconnect
-- Automatic reconnection on AP disconnect
-- Message queue persistence (optional)
-- Better error messages with suggestions
+**Issues**:
+- IPC connection failure → mod cannot register (no retry)
+- AP connection failure → framework offline (no reconnection)
+- Message send failure → message lost (no retry)
+- Transient network issues cause permanent failures
 
-**Impact**: Users must manually restart on transient failures.
+### Solution
 
-### Solution Design
+Implement **retry logic and recovery**:
 
-#### Error Handling Strategy
+**IPC Client**:
+- Retry connection with exponential backoff
+- Queue messages if not connected
+- Flush queue when connection established
 
-1. **Transient Errors**: Auto-retry with exponential backoff
-2. **Permanent Errors**: Log clear message with solution
-3. **Recoverable Errors**: Attempt recovery, fallback to restart prompt
+**AP Client**:
+- Automatic reconnection on disconnect
+- Exponential backoff for reconnection attempts
+- State preservation across reconnections
 
-#### Retry Logic
-
-```
-Attempt 1: Immediate
-Attempt 2: Wait 1s
-Attempt 3: Wait 2s
-Attempt 4: Wait 4s
-Attempt 5: Wait 8s
-Give up: After 5 attempts (15s total)
-```
+**Message Router**:
+- Retry failed message sends
+- Queue messages for offline mods
+- Handle mod disconnections gracefully
 
 ### Implementation Steps
 
-#### Step 1: IPC Client Reconnection (3 hours)
+#### Step 1: IPC Client Retry Logic
 
-**File**: [src/client_lib/src/ipc_client.cpp](../../../src/client_lib/src/ipc_client.cpp)
+**File**: [src/client_lib/src/ipc_client.cpp](../../../../src/client_lib/src/ipc_client.cpp)
 
-**Add Retry Logic**:
+**Add retry logic**:
 ```cpp
 class IPCClient {
-public:
-    bool connect(const std::string& pipe_name);
-
 private:
-    bool connect_with_retry(int max_attempts = 5);
-    void exponential_backoff(int attempt);
+    std::queue<std::string> message_queue_;
+    int retry_count_ = 0;
+    int max_retries_ = 5;
+    int base_delay_ms_ = 100;
 
-    int retry_attempt_ = 0;
-    std::chrono::steady_clock::time_point last_retry_time_;
+public:
+    bool connect_with_retry() {
+        for (int attempt = 0; attempt < max_retries_; ++attempt) {
+            if (connect()) {
+                LOG_INFO("IPC connection established");
+                flush_message_queue();
+                return true;
+            }
+
+            int delay = base_delay_ms_ * (1 << attempt);  // Exponential backoff
+            LOG_WARNING("IPC connection failed, retrying in " + std::to_string(delay) + "ms (attempt " +
+                       std::to_string(attempt + 1) + "/" + std::to_string(max_retries_) + ")");
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+        }
+
+        LOG_ERROR("Failed to connect to IPC server after " + std::to_string(max_retries_) + " attempts");
+        return false;
+    }
+
+    void send_or_queue(const std::string& message) {
+        if (is_connected_) {
+            if (!send(message)) {
+                LOG_WARNING("Send failed, queueing message");
+                message_queue_.push(message);
+            }
+        } else {
+            LOG_WARNING("Not connected, queueing message");
+            message_queue_.push(message);
+        }
+    }
+
+    void flush_message_queue() {
+        while (!message_queue_.empty()) {
+            auto& message = message_queue_.front();
+            if (send(message)) {
+                message_queue_.pop();
+            } else {
+                LOG_WARNING("Failed to flush message queue");
+                break;
+            }
+        }
+    }
 };
-
-bool IPCClient::connect_with_retry(int max_attempts) {
-    for (int attempt = 1; attempt <= max_attempts; attempt++) {
-        retry_attempt_ = attempt;
-
-        LOG_DEBUG("IPC connection attempt {} of {}", attempt, max_attempts);
-
-        if (connect_immediate()) {
-            LOG_INFO("IPC connected on attempt {}", attempt);
-            retry_attempt_ = 0;
-            return true;
-        }
-
-        if (attempt < max_attempts) {
-            exponential_backoff(attempt);
-        }
-    }
-
-    LOG_ERROR("IPC connection failed after {} attempts", max_attempts);
-    last_error_ = "Failed to connect to framework. Ensure APFramework is loaded.";
-    return false;
-}
-
-void IPCClient::exponential_backoff(int attempt) {
-    int delay_ms = (1 << (attempt - 1)) * 1000;  // 1s, 2s, 4s, 8s...
-    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
-}
-
-bool IPCClient::connect_immediate() {
-    // Wait for pipe availability (5s timeout)
-    if (!WaitNamedPipeA(pipe_path_.c_str(), 5000)) {
-        return false;
-    }
-
-    // Open pipe
-    pipe_handle_ = CreateFileA(
-        pipe_path_.c_str(),
-        GENERIC_READ | GENERIC_WRITE,
-        0, nullptr, OPEN_EXISTING, 0, nullptr
-    );
-
-    if (pipe_handle_ == INVALID_HANDLE_VALUE) {
-        return false;
-    }
-
-    // Set message mode
-    DWORD mode = PIPE_READMODE_MESSAGE;
-    SetNamedPipeHandleState(pipe_handle_, &mode, nullptr, nullptr);
-
-    connected_ = true;
-    return true;
-}
-
-// Auto-reconnect on disconnect
-bool IPCClient::send_message(const IPCMessage& msg) {
-    if (!connected_) {
-        // Attempt reconnection
-        if (!connect_with_retry(3)) {  // Quick retry (3 attempts)
-            return false;
-        }
-    }
-
-    // Send message...
-    if (!write_success) {
-        // Pipe broken, mark disconnected
-        connected_ = false;
-        CloseHandle(pipe_handle_);
-        pipe_handle_ = INVALID_HANDLE_VALUE;
-        return false;
-    }
-
-    return true;
-}
 ```
 
-#### Step 2: AP Client Reconnection (2 hours)
+**Estimate**: 3 hours
 
-**File**: [src/framework_core/src/ap_client.cpp](../../../src/framework_core/src/ap_client.cpp)
+---
 
-**Add Auto-Reconnect**:
+#### Step 2: AP Client Reconnection Logic
+
+**File**: [src/framework_core/src/ap_client.cpp](../../../../src/framework_core/src/ap_client.cpp)
+
+**Add reconnection**:
 ```cpp
-class APClientWrapper {
-public:
-    void poll();
-    bool is_connected() const;
-    void attempt_reconnect();
-
+class APClient {
 private:
-    void handle_disconnect();
-
     bool auto_reconnect_ = true;
     int reconnect_attempt_ = 0;
-    std::chrono::steady_clock::time_point last_reconnect_time_;
+    int max_reconnect_attempts_ = 10;
 
-    // Cached connection params for reconnect
-    std::string cached_server_;
-    int cached_port_ = 0;
-    std::string cached_slot_;
-    std::string cached_password_;
-};
-
-void APClientWrapper::poll() {
-    std::lock_guard<std::mutex> lock(client_mutex_);
-
-    if (!impl_ || !impl_->client) {
-        // Not connected, try reconnect if enabled
-        if (auto_reconnect_ && !cached_server_.empty()) {
-            attempt_reconnect();
-        }
-        return;
-    }
-
-    impl_->client->poll();
-
-    // Check connection state
-    if (impl_->client->get_state() == ::APClient::State::DISCONNECTED) {
-        handle_disconnect();
-    }
-}
-
-void APClientWrapper::handle_disconnect() {
-    LOG_WARNING("Disconnected from AP server");
-
-    // Queue disconnect message
-    APMessage msg;
-    msg.type = APMessage::Type::Disconnected;
-    pending_messages_.push(msg);
-
-    if (auto_reconnect_) {
-        LOG_INFO("Auto-reconnect enabled, will retry...");
-    }
-}
-
-void APClientWrapper::attempt_reconnect() {
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-        now - last_reconnect_time_
-    ).count();
-
-    // Exponential backoff: 5s, 10s, 20s, 40s...
-    int delay = (1 << std::min(reconnect_attempt_, 6)) * 5;
-
-    if (elapsed < delay) {
-        return;  // Too soon, wait longer
-    }
-
-    reconnect_attempt_++;
-    last_reconnect_time_ = now;
-
-    LOG_INFO("Reconnection attempt {} (waited {}s)", reconnect_attempt_, elapsed);
-
-    if (connect(cached_server_, cached_port_, cached_slot_, cached_password_)) {
-        LOG_INFO("Reconnected successfully!");
-        reconnect_attempt_ = 0;
-    } else {
-        LOG_WARNING("Reconnection attempt {} failed", reconnect_attempt_);
-    }
-}
-
-bool APClientWrapper::connect(
-    const std::string& server,
-    int port,
-    const std::string& slot_name,
-    const std::string& password)
-{
-    // Cache params for reconnect
-    cached_server_ = server;
-    cached_port_ = port;
-    cached_slot_ = slot_name;
-    cached_password_ = password;
-
-    // Existing connection logic...
-}
-```
-
-#### Step 3: Better Error Messages (3 hours)
-
-**Create Error Message Formatter**:
-
-**File**: [src/framework_core/include/error_messages.h](../../../src/framework_core/include/error_messages.h)
-
-```cpp
-#pragma once
-#include <string>
-
-class ErrorMessages {
 public:
-    // Format error with helpful context and suggestions
-    static std::string format_error(
-        const std::string& error_code,
-        const std::string& context = ""
-    );
+    void on_disconnect() {
+        LOG_WARNING("AP connection lost");
 
-    // Common errors
-    static constexpr const char* INVALID_MOD_ID = "INVALID_MOD_ID";
-    static constexpr const char* REGISTRATION_TIMEOUT = "REGISTRATION_TIMEOUT";
-    static constexpr const char* IPC_CONNECTION_FAILED = "IPC_CONNECTION_FAILED";
-    static constexpr const char* AP_CONNECTION_FAILED = "AP_CONNECTION_FAILED";
-    static constexpr const char* VERSION_MISMATCH = "VERSION_MISMATCH";
+        if (auto_reconnect_) {
+            reconnect_with_backoff();
+        }
+    }
+
+    void reconnect_with_backoff() {
+        for (int attempt = 0; attempt < max_reconnect_attempts_; ++attempt) {
+            int delay = 1000 * (1 << attempt);  // 1s, 2s, 4s, 8s, ...
+            LOG_INFO("Reconnecting to AP server in " + std::to_string(delay / 1000) + "s (attempt " +
+                    std::to_string(attempt + 1) + "/" + std::to_string(max_reconnect_attempts_) + ")");
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+
+            if (connect(server_, port_, slot_name_, password_)) {
+                LOG_INFO("Reconnected to AP server successfully");
+                return;
+            }
+        }
+
+        LOG_ERROR("Failed to reconnect to AP server after " + std::to_string(max_reconnect_attempts_) + " attempts");
+    }
 };
 ```
 
-**File**: [src/framework_core/src/error_messages.cpp](../../../src/framework_core/src/error_messages.cpp)
+**Estimate**: 3 hours
 
+---
+
+#### Step 3: Enhanced Error Messages
+
+**Add contextual error messages**:
 ```cpp
-#include "error_messages.h"
-#include <map>
+void FrameworkCore::send_error_with_context(const std::string& mod_id, const std::string& error, const std::string& suggestion) {
+    json error_msg;
+    error_msg["type"] = "error";
+    error_msg["mod_id"] = mod_id;
+    error_msg["error"] = error;
+    error_msg["suggestion"] = suggestion;
 
-static const std::map<std::string, std::string> ERROR_TEMPLATES = {
-    {"INVALID_MOD_ID",
-     "Invalid mod_id format.\n"
-     "Expected: author.game.mod\n"
-     "Example: john.palworld.chest_shuffle\n"
-     "Fix: Update 'mod_id' in your ap_config.json"},
+    message_router_->send_to_mod(mod_id, error_msg.dump());
 
-    {"REGISTRATION_TIMEOUT",
-     "Mod registration timeout.\n"
-     "Possible causes:\n"
-     "  1. Mod loaded before framework (check load order)\n"
-     "  2. Mod crashed during startup\n"
-     "  3. Mod's ap_config.json has incorrect mod_id\n"
-     "Fix: Check UE4SS.log for mod errors, verify load order"},
-
-    {"IPC_CONNECTION_FAILED",
-     "Failed to connect to framework IPC server.\n"
-     "Possible causes:\n"
-     "  1. APFramework not loaded\n"
-     "  2. Framework crashed during startup\n"
-     "  3. Incorrect pipe name\n"
-     "Fix: Ensure APFramework loads before your mod, check framework.log"},
-
-    {"AP_CONNECTION_FAILED",
-     "Failed to connect to Archipelago server.\n"
-     "Possible causes:\n"
-     "  1. Server is offline\n"
-     "  2. Incorrect server address or port\n"
-     "  3. Network firewall blocking connection\n"
-     "Fix: Verify server is running, check connection settings"},
-
-    {"VERSION_MISMATCH",
-     "Mod version incompatible with game version.\n"
-     "This may cause crashes or unexpected behavior.\n"
-     "Fix: Update mod to compatible version or ignore warning"}
-};
-
-std::string ErrorMessages::format_error(
-    const std::string& error_code,
-    const std::string& context)
-{
-    auto it = ERROR_TEMPLATES.find(error_code);
-    if (it == ERROR_TEMPLATES.end()) {
-        return "Unknown error: " + error_code;
-    }
-
-    std::string msg = it->second;
-
-    if (!context.empty()) {
-        msg += "\n\nContext: " + context;
-    }
-
-    return msg;
+    LOG_ERROR("[" + mod_id + "] " + error);
+    LOG_INFO("[" + mod_id + "] Suggestion: " + suggestion);
 }
+
+// Example usage
+send_error_with_context(
+    "some.mod.id",
+    "Registration denied: Missing dependency 'required.mod.id'",
+    "Install 'required.mod.id' or disable this mod"
+);
 ```
 
-**Usage**:
-```cpp
-LOG_ERROR("{}", ErrorMessages::format_error(
-    ErrorMessages::INVALID_MOD_ID,
-    "mod_id: 'MyMod'"
-));
-```
-
-### Testing Plan
-
-**IPC Reconnection Test**:
-1. Start mod before framework
-2. Verify retry attempts logged
-3. Start framework mid-retry
-4. Verify connection succeeds
-
-**AP Reconnection Test**:
-1. Connect to AP server
-2. Stop AP server
-3. Verify disconnect logged
-4. Restart AP server
-5. Verify auto-reconnect succeeds
-
-**Error Message Test**:
-1. Trigger each error condition
-2. Verify helpful error message logged
-3. Verify message includes fix suggestions
+**Estimate**: 2 hours
 
 ---
 
-## Integration and Testing
+#### Step 4: Testing
 
-### Full System Test
+**Test Cases**:
+1. IPC server offline → client retries with backoff
+2. AP server offline → framework retries with backoff
+3. Transient network failure → automatic recovery
+4. Message queue → messages sent when connection restored
 
-**Test Environment**:
-- Clean UE4SS installation
-- 3 test mods (1 Lua, 1 C++ static, 1 C++ dynamic)
-- Mock AP server
-- Various game versions
-
-**Test Scenarios**:
-
-1. **Clean Install**: All mods compatible
-   - Expected: No warnings, all features work
-
-2. **Version Mismatch**: Mod incompatible with game version
-   - Expected: Warning logged, mod still loads
-
-3. **Mod Conflict**: Two incompatible mods
-   - Expected: Warning logged, both mods load
-
-4. **Transient IPC Failure**: Framework starts late
-   - Expected: Mods retry and connect
-
-5. **Transient AP Failure**: Server goes down mid-session
-   - Expected: Auto-reconnect when server returns
+**Estimate**: 2-4 hours
 
 ---
 
-## Documentation Requirements
+### Files Modified
 
-**New Documents**:
-- `docs/VERSION_COMPATIBILITY.md` - Semver guide
-- `docs/ERROR_RECOVERY.md` - Error handling guide
-- `docs/BUILDING_CPP_MODS.md` - Static vs dynamic linking
+- [src/client_lib/src/ipc_client.cpp](../../../../src/client_lib/src/ipc_client.cpp) - **MAJOR**
+- [src/framework_core/src/ap_client.cpp](../../../../src/framework_core/src/ap_client.cpp) - **MAJOR**
+- [src/framework_core/src/ipc_server.cpp](../../../../src/framework_core/src/ipc_server.cpp) - **MODERATE**
 
-**Updated Documents**:
-- `README.md` - Add version compatibility section
-- `docs/TROUBLESHOOTING.md` - Add error message reference
+**Estimated Lines Changed**: ~300-400 lines
 
 ---
 
-## Success Metrics
+### Success Criteria
 
-After Phase 3 completion:
-
-- [ ] Version warnings displayed for all mismatches
-- [ ] Static library build available and tested
-- [ ] Transient failures recover automatically
-- [ ] Error messages rated "helpful" by testers
-- [ ] Framework achieves 99% uptime in stress tests
-- [ ] All documentation complete and accurate
+- [ ] IPC connection retries with exponential backoff
+- [ ] AP connection auto-reconnects on disconnect
+- [ ] Message queue prevents message loss
+- [ ] Enhanced error messages with actionable suggestions
+- [ ] Transient failures recovered gracefully
 
 ---
 
-## Rollout Strategy
+## Phase 3 Completion Checklist
 
-### Phase 3.1: Semver (Week 1)
-- Implement semver parser
-- Add validation logic
-- Test with various version scenarios
-- Deploy to beta
+### Implementation Order
 
-### Phase 3.2: Static Lib (Week 2)
-- Add CMake build options
-- Test both static and dynamic builds
-- Update documentation
-- Provide example
+- [ ] 3.1 Semantic version validation (8-10 hours)
+- [ ] 3.2 Static .lib build (2-3 hours)
+- [ ] 3.3 Advanced error handling (8-12 hours)
 
-### Phase 3.3: Error Handling (Week 2-3)
-- Implement retry logic
-- Add error message templates
-- Test failure scenarios
-- Gather user feedback on messages
+### Success Criteria
+
+- [ ] Semantic versioning implemented and tested
+- [ ] Static library build option available
+- [ ] Retry/recovery logic working
+- [ ] All features documented
+- [ ] Ready for enhanced release (v1.1+)
 
 ---
 
-**End of Phase 3 Plan**
+## Recommendation
+
+**Phase 3 is OPTIONAL for initial release**. These features improve polish and long-term stability but are not critical for core functionality.
+
+**Recommended Approach**:
+1. Complete Phase 1 + Phase 2
+2. Release v1.0 (beta or stable)
+3. Gather community feedback
+4. Implement Phase 3 features based on actual user needs
+5. Release v1.1+ with enhancements
+
+**Community-Driven Priorities**:
+- If users report version confusion → prioritize 3.1
+- If C++ mod developers request static linking → prioritize 3.2
+- If users experience connection issues → prioritize 3.3
+
+---
+
+**End of Phase 3 Implementation Plan**
+
+**All Phases Complete** - Ready for review and implementation!
