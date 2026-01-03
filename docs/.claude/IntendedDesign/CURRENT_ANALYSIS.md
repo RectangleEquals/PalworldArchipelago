@@ -1,853 +1,1054 @@
-# Current Implementation vs Intended Design - Gap Analysis
+# Current Implementation vs Intended Design - Gap Analysis (REVISED)
 
-**Document Version**: 1.0
+**Document Version**: 2.0
 **Date**: 2026-01-02
-**Status**: Current implementation analysis complete
+**Status**: Comprehensive re-analysis with corrected design understanding
 
 ---
 
 ## Executive Summary
 
-This document provides a comprehensive comparison between the **current implementation** of APFramework (IPC branch) and the **intended design** as specified in [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md).
+This document provides a comprehensive comparison between the **current implementation** of APFramework (IPC branch) and the **corrected intended design** as specified in [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md), incorporating critical design clarifications.
 
 ### Quick Assessment
 
 | Aspect | Current State | Intended Design | Gap Level |
 |--------|---------------|-----------------|-----------|
-| Core Architecture | ✅ Fully implemented | Two-part combo system | 🟢 **Aligned** |
-| IPC Communication | ✅ Named Pipes working | IPC server/client | 🟢 **Aligned** |
-| Mod Discovery | ✅ JSON scanning | Promise-based discovery | 🟡 **Partial** |
-| Registration System | ✅ Timeout-based | Promise fulfillment | 🟢 **Aligned** |
-| Capabilities Generation | ✅ APCapabilities.json | APCapabilities.json | 🟢 **Aligned** |
-| Framework→UE4SS Logging | ❌ Not implemented | Message pumping to UE4SS | 🔴 **Missing** |
-| Mod Metadata Schema | ❌ Minimal | Rich metadata schema | 🔴 **Incomplete** |
-| Mod ID Format | ❌ No enforcement | `author.game.mod` | 🔴 **Missing** |
-| Version Compatibility | ❌ Not implemented | Semantic versioning + ranges | 🔴 **Missing** |
-| Incompatibility Checking | ❌ Not implemented | Incompatible mod detection | 🔴 **Missing** |
-| C++ Mod Support | ⚠️ Library exists | Full support with delayed reg | 🟡 **Partial** |
+| Library Separation | ✅ Two libraries exist | Framework + Client libs | 🟢 **Correct** |
+| Framework Mod Dual Role | ❌ Not implemented | Server + Priority Client | 🔴 **CRITICAL** |
+| Incompatibility System | ❌ Not implemented | Auto-disable conflicts | 🔴 **CRITICAL** |
+| Dependency System | ❌ Not implemented | Hard requirements | 🔴 **CRITICAL** |
+| Multi-Slot Capabilities | ❌ Single file only | Per-slot JSON files | 🔴 **CRITICAL** |
+| Capabilities Validation | ⚠️ Basic | Zero-tolerance conflicts | 🟡 **Partial** |
+| Runtime Enablement | ❌ Not implemented | Editable at runtime | 🔴 **Missing** |
+| Log Routing to UE4SS | ❌ Not implemented | Via framework mod | 🔴 **Missing** |
+| Lua JSON Integration | ⚠️ Custom impl | lunajson integration | 🟡 **Partial** |
+| AP World Python Support | ✅ Exists | Dynamic capabilities | 🟢 **Advanced** |
 
 ### Overall Gap Assessment
 
-- **Architecture**: ✅ 95% aligned - core design matches intended
-- **Features**: ⚠️ 60% complete - missing metadata/validation
-- **Quality**: ✅ Production-ready core, needs additional features
+- **Architecture**: ⚠️ 70% aligned - missing dual-role framework mod
+- **Features**: ⚠️ 45% complete - missing critical safety systems
+- **Quality**: ✅ Solid foundation, but needs major additions
 
 ---
 
-## 1. Framework Architecture Comparison
+## Critical Design Clarifications
+
+### Two Separate Libraries (CORRECTED UNDERSTANDING)
+
+**Framework C++ Library** (`APFrameworkCore.dll`):
+- Used **ONLY** by Lua framework mod
+- Provides: IPC server, AP client, mod registry, message routing
+- Acts as the "server" in the IPC architecture
+
+**Client C++ Library** (`APClientLib.dll`):
+- Used by **ALL** mods including the Lua framework mod
+- Provides: IPC client, message sending/receiving, callbacks
+- Lightweight wrapper for mod communication
+
+**Lua Framework Mod**:
+- Uses `APFrameworkCore.dll` to run as IPC server
+- Uses `APClientLib` (Lua wrapper) to register as priority client
+- Mod ID: `archipelago.palworld.framework`
+- Receives ALL important framework logs and status updates
+- Pumps messages to UE4SS console for user visibility
+
+---
+
+## 1. Framework Architecture - Library Separation
 
 ### 1.1 Intended Design
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
+**Two Libraries with Clear Separation**:
+```
+APFrameworkCore.dll (Framework Library)
+  - IPC Server (Named Pipes)
+  - AP Client Wrapper (apclientpp)
+  - Mod Registry & Discovery
+  - Message Router
+  - Capabilities Generator
+  - Logger
+  - Config Manager
+  ↓
+  Used ONLY by: Lua Framework Mod
 
-> **Framework (a "two-part combo" system):**
-> - A C++ framework library acting as both an AP Client and IPC server, with additional Lua bindings
-> - A regular, minimal UE4SS Lua mod which utilizes the Lua C bindings to:
->   - Load the framework config/profiles
->   - Set up the IPC Server
->   - Auto-discover any UE4SS mod "promises"
->   - Waits for all registration promises to be fulfilled before allowing the AP client to connect
+APClientLib.dll (Client Library)
+  - IPC Client (Named Pipes)
+  - Message serialization
+  - Callback system
+  - Simple registration API
+  ↓
+  Used by: ALL mods (including Lua Framework Mod)
+```
+
+**Lua Framework Mod** ([APFramework/Scripts/main.lua](../../APFramework/Scripts/main.lua)):
+- Loads `APFrameworkCore.dll` via Lua C bindings
+- Loads `ap_client.lua` (Lua wrapper for client lib)
+- Calls `framework_core.start_ipc()` to become server
+- Calls `ap_client:register("archipelago.palworld.framework", {...})` to become priority client
+- Acts as message pump to UE4SS console
 
 ### 1.2 Current Implementation
 
-**C++ Framework Core** ([framework_core.h](../../src/framework_core/include/framework_core.h)):
-- ✅ Acts as AP Client (via APClientWrapper wrapping apclientpp)
-- ✅ Acts as IPC server (via IPCServer using Windows Named Pipes)
-- ✅ Provides Lua bindings (via lua_bindings.cpp using native Lua C API)
+**Libraries**:
+- ✅ `APFrameworkCore.dll` exists ([src/framework_core/](../../src/framework_core/))
+- ✅ `APClientLib.dll` exists ([src/client_lib/](../../src/client_lib/))
+- ✅ Lua wrapper `ap_client.lua` exists ([src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua))
 
-**UE4SS Lua Mod** ([APFramework/Scripts/main.lua](../../APFramework/Scripts/main.lua)):
-- ✅ Loads framework config from `framework_config.json`
-- ✅ Sets up IPC server via `framework:start_ipc()`
-- ✅ Auto-discovers mods via `framework:discover_mods("ue4ss\\Mods")`
-- ✅ Waits for registration via state machine (`WAIT_REG` state with timeout)
-- ✅ Connects to AP only after registration complete
+**Framework Mod**:
+- ✅ Uses `APFrameworkCore.dll` via Lua bindings
+- ❌ **DOES NOT** use `ap_client.lua` to register as client
+- ❌ **DOES NOT** register with mod ID `archipelago.palworld.framework`
+- ❌ **DOES NOT** act as dual-role (server + priority client)
 
 ### 1.3 Gap Analysis
 
 | Feature | Intended | Current | Status |
 |---------|----------|---------|--------|
-| Two-part architecture | Required | Implemented | ✅ **Complete** |
-| C++ acts as AP client | Required | APClientWrapper | ✅ **Complete** |
-| C++ acts as IPC server | Required | IPCServer (Named Pipes) | ✅ **Complete** |
-| Lua bindings | Required | Native Lua C API | ✅ **Complete** |
-| Minimal Lua mod | Required | main.lua + wrapper | ✅ **Complete** |
-| Config loading | Required | config.lua | ✅ **Complete** |
-| IPC setup | Required | start_ipc() | ✅ **Complete** |
-| Mod discovery | "Promises" | JSON scanning | ✅ **Complete** |
-| Registration waiting | Timeout-based | 180s timeout | ✅ **Complete** |
-| AP connection gating | After all register | After all or timeout | ✅ **Complete** |
+| Two separate libraries | Required | Implemented | ✅ **Complete** |
+| Framework lib for server only | Required | Correct usage | ✅ **Complete** |
+| Client lib for all mods | Required | Library exists | ✅ **Complete** |
+| Framework mod uses both libs | Required | Only uses framework lib | ❌ **MISSING** |
+| Registers as priority client | Required | Not implemented | ❌ **MISSING** |
+| Mod ID: archipelago.palworld.framework | Required | Not registered | ❌ **MISSING** |
 
-**Conclusion**: Core architecture is **fully aligned** with intended design.
+**Critical Issue**: Framework mod cannot receive its own messages, cannot participate in AP session as a mod, and cannot demonstrate the client library to other mod developers.
 
----
-
-## 2. Framework Logging to UE4SS Console
-
-### 2.1 Intended Design
-
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
-
-> The C++ framework library logs **ALL** internal activity (including any warnings/errors) to a dedicated log file, but also looks specifically for registration from the Lua framework mod and **pumps important messages to it** so it can display those messages within the UE4SS console log and subsequently within UE4SS's dedicated log file (`ue4ss/UE4SS.log`) as a result.
-
-**Expected Behavior**:
-1. C++ logs everything to `APFramework/Logs/framework.log`
-2. C++ identifies "important" messages (errors, warnings, key events)
-3. C++ sends these messages to the Lua framework mod via IPC or callback
-4. Lua mod prints them to UE4SS console (`print()`)
-5. UE4SS automatically logs console output to `ue4ss/UE4SS.log`
-
-### 2.2 Current Implementation
-
-**File Logging** ([logger.cpp](../../src/framework_core/src/logger.cpp)):
-- ✅ Logs all internal activity to `APFramework/Logs/framework.log`
-- ✅ Includes timestamps, levels (DEBUG, INFO, WARNING, ERROR)
-- ✅ Thread-safe singleton
-
-**Console Logging**:
-- ❌ **NO message pumping mechanism exists**
-- ❌ C++ does not send messages to Lua mod
-- ❌ Lua mod only logs its own state transitions
-- ❌ Important C++ errors/warnings are NOT visible in UE4SS console
-
-**Current Behavior**:
-- C++ logs to file only
-- Lua logs its own activities to UE4SS console
-- No bridge between C++ log messages and UE4SS console
-
-### 2.3 Gap Analysis
-
-| Feature | Intended | Current | Status |
-|---------|----------|---------|--------|
-| C++ file logging | Required | Logger class | ✅ **Complete** |
-| Important message identification | Required | Not implemented | ❌ **Missing** |
-| Message pumping to Lua | Required | Not implemented | ❌ **Missing** |
-| UE4SS console output | Required | Lua-only logging | ❌ **Partial** |
-| `ue4ss/UE4SS.log` integration | Required | Indirect (Lua only) | ❌ **Partial** |
-
-**Impact**: Users cannot see critical framework errors/warnings without checking the dedicated log file. Debugging is harder.
-
-**Recommendation**: Implement a message queue for "important" log entries that Lua can poll and print.
+**Files to Modify**:
+- [APFramework/Scripts/main.lua](../../APFramework/Scripts/main.lua) - Add client registration
+- [src/framework_core/src/framework_core.cpp](../../src/framework_core/src/framework_core.cpp) - Special handling for framework mod_id
 
 ---
 
-## 3. Mod Metadata Schema
+## 2. Mod Metadata Schema
 
-### 3.1 Intended Design
+### 2.1 Intended Schema (v2 - CORRECTED)
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
-
-> Mods need to provide a **JSON file** within their own mod folders which contains **metadata** about their mod:
-> - **mod id** in the format of `author.game.mod`
-> - **semantic mod version**
-> - **mod display name**
-> - **mod description**
-> - **supported range of target game versions**
-> - **list of other mods this mod is incompatible with** and/or optionally a **range of unsupported versions** of those mods
-
-**Expected Schema** (inferred):
 ```json
 {
+  "schema_version": 2,
   "mod_id": "author.game.mod",
   "version": "1.2.3",
   "display_name": "My Awesome Mod",
-  "description": "Does cool things",
+  "description": "Adds cool features",
   "supported_game_versions": ">=0.3.0 <0.4.0",
-  "incompatible_mods": [
-    {"mod_id": "other.mod", "versions": ">=2.0.0"}
-  ],
+
+  "dependencies": {
+    "required.mod.id": {"min_version": "1.0.0", "max_version": "2.0.0"},
+    "another.required.mod": true
+  },
+
+  "incompatible_mods": {
+    "conflicting.mod.id": {"min_version": "1.0.0", "max_version": "2.0.0"},
+    "broken.mod.id": ["1.5.0", "1.5.1", "1.6.3"],
+    "completely.incompatible.mod": true
+  },
+
+  "enabled": true,
+
   "capabilities": {
-    "items": [...],
-    "locations": [...],
-    "regions": [...]
+    "items": [
+      {"id": 100000, "name": "Item", "classification": "useful"}
+    ],
+    "locations": [
+      {"id": 200000, "name": "Location", "region": "Region"}
+    ],
+    "regions": [
+      {"name": "Region", "connects_to": ["Other"]}
+    ],
+    "custom_fields": {
+      "tech_trees": [...],
+      "breeding_data": [...]
+    }
   }
 }
 ```
 
-### 3.2 Current Implementation
+**Key Design Points**:
+- **Dependencies**: Hard requirements - registration **DENIED** if missing
+- **Incompatibilities**: Three types:
+  1. Version range: `{"min_version": "1.0", "max_version": "2.0"}`
+  2. Specific versions: `["1.5.0", "1.5.1"]`
+  3. Complete ban: `true`
+- **Mutual incompatibility**: Both mods disabled if both declare each other
+- **One-way incompatibility**: Only the declaring mod disabled
+- **Enablement**: Editable at runtime by framework (in memory AND file)
+- **Custom capabilities**: Extensible base schema for future-proofing
 
-**Current Schema** ([mod_registry.cpp](../../src/framework_core/src/mod_registry.cpp) parsing):
+### 2.2 Current Implementation
 
+**Current Schema**:
 ```json
 {
   "mod_id": "SomeModId",
-  "items": [
-    {"id": 100000, "name": "Item", "classification": "useful"}
-  ],
-  "locations": [
-    {"id": 200000, "name": "Location", "region": "Region"}
-  ],
-  "regions": [
-    {"name": "Region", "connects_to": ["Other"]}
-  ]
+  "items": [...],
+  "locations": [...],
+  "regions": [...]
 }
 ```
 
-**What's Missing**:
-- ❌ No `author.game.mod` format enforcement
-- ❌ No semantic version field
-- ❌ No display name
-- ❌ No description
-- ❌ No supported game version range
-- ❌ No incompatible mods list
-- ❌ No validation of mod_id format
+**What Exists**:
+- ✅ mod_id field
+- ✅ items, locations, regions
 
-### 3.3 Gap Analysis
+**What's Missing**:
+- ❌ schema_version
+- ❌ version, display_name, description
+- ❌ supported_game_versions
+- ❌ **dependencies** (CRITICAL)
+- ❌ **incompatible_mods** (CRITICAL)
+- ❌ **enabled** field
+- ❌ Custom extensible fields
+
+### 2.3 Gap Analysis
 
 | Field | Intended | Current | Status |
 |-------|----------|---------|--------|
-| mod_id format | `author.game.mod` | Any string | ❌ **Missing** |
-| version | Semantic (1.2.3) | Not present | ❌ **Missing** |
-| display_name | Human-readable | Not present | ❌ **Missing** |
-| description | Text | Not present | ❌ **Missing** |
-| supported_game_versions | Version range | Not present | ❌ **Missing** |
-| incompatible_mods | List with versions | Not present | ❌ **Missing** |
-| capabilities | Items/locations/regions | Present | ✅ **Complete** |
+| schema_version | Required | Not present | ❌ **Missing** |
+| mod_id | Required | Present | ✅ **Complete** |
+| version | Required | Not present | ❌ **Missing** |
+| display_name | Required | Not present | ❌ **Missing** |
+| description | Optional | Not present | ❌ **Missing** |
+| supported_game_versions | Optional | Not present | ❌ **Missing** |
+| **dependencies** | **CRITICAL** | **Not present** | ❌ **CRITICAL** |
+| **incompatible_mods** | **CRITICAL** | **Not present** | ❌ **CRITICAL** |
+| **enabled** | **CRITICAL** | **Not present** | ❌ **CRITICAL** |
+| capabilities | Required | Present | ✅ **Complete** |
+| Custom fields in capabilities | Optional | Supported via JSON | ✅ **Complete** |
 
 **Impact**:
-- No mod versioning → can't detect outdated mods
-- No incompatibility checking → conflicts not detected
-- No display names → poor UX in error messages
-- No game version validation → mods may break on game updates
+- Cannot enforce mod dependencies → mods may load without required dependencies
+- Cannot detect incompatibilities → conflicts cause crashes
+- Cannot disable mods at runtime → no conflict resolution
+- No versioning → cannot warn about outdated mods
 
-**Recommendation**: Extend `ap_config.json` schema and add validation in ModRegistry.
+**Files to Modify**:
+- [src/framework_core/include/mod_registry.h](../../src/framework_core/include/mod_registry.h) - Extend ModMetadata struct
+- [src/framework_core/src/mod_registry.cpp](../../src/framework_core/src/mod_registry.cpp) - Parse new fields, add validation
 
 ---
 
-## 4. Mod Discovery and Registration
+## 3. Dependency System (NEW - CRITICAL)
+
+### 3.1 Intended Design
+
+**Purpose**: Ensure mods can declare hard requirements on other mods.
+
+**Behavior**:
+- If dependency is missing → **Registration DENIED**
+- If dependency exists but wrong version → **Registration DENIED**
+- If dependency is disabled due to its own missing dependency → **Cascade disable**
+
+**Schema**:
+```json
+"dependencies": {
+  "base.palworld.lib": true,  // Any version
+  "helper.palworld.utils": {"min_version": "1.0.0"},  // Min only
+  "data.palworld.tables": {"min_version": "2.0.0", "max_version": "3.0.0"}  // Range
+}
+```
+
+**Discovery Flow**:
+```
+1. Discover all mods (scan ap_config.json)
+2. Parse dependencies for each mod
+3. Build dependency graph
+4. For each mod:
+   a. Check all dependencies exist
+   b. Check all dependency versions satisfied
+   c. If any missing/wrong version → mark mod as DISABLED
+   d. Send IPC error to mod explaining why
+5. Recursive pass: If mod X disabled, disable mods depending on X
+6. Generate final list of enabled mods
+```
+
+**Example**:
+```
+Mod A (enabled) depends on Mod B v1.0+
+Mod B v0.5 (wrong version)
+Result: Mod A DISABLED (dependency version mismatch)
+
+Mod C depends on Mod A
+Result: Mod C DISABLED (dependency chain broken)
+```
+
+### 3.2 Current Implementation
+
+**Status**: ❌ **COMPLETELY MISSING**
+
+**What Doesn't Exist**:
+- No `dependencies` field parsing
+- No dependency validation logic
+- No dependency graph construction
+- No cascade disabling
+- No IPC error messages for missing dependencies
+
+### 3.3 Gap Analysis
+
+| Feature | Intended | Current | Status |
+|---------|----------|---------|--------|
+| Dependencies schema | Required | Not present | ❌ **Missing** |
+| Dependency validation | Required | Not implemented | ❌ **Missing** |
+| Version range checking | Required | Not implemented | ❌ **Missing** |
+| Registration denial | Required | Not implemented | ❌ **Missing** |
+| Cascade disabling | Required | Not implemented | ❌ **Missing** |
+| Error messages to mods | Required | Not implemented | ❌ **Missing** |
+
+**Impact**: Mods can register without their required dependencies, leading to runtime crashes or broken functionality.
+
+**Implementation Priority**: 🔴 **CRITICAL** - Must be Phase 1
+
+---
+
+## 4. Incompatibility System (NEW - CRITICAL)
 
 ### 4.1 Intended Design
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
+**Purpose**: Prevent conflicting mods from running simultaneously.
 
-> The framework should scan the local UE4SS ecosystem for these JSON **"promises"**, and if enabled, add them to a queue to await for IPC registration from all enabled AP mods.
+**Three Types of Incompatibility**:
 
-**Key Concept**: "Promises" are contractual obligations:
-1. Mod promises to register within timeout (3 minutes default)
-2. Mod promises to fulfill capabilities as described
-3. Framework trusts mod on "good faith"
+**Type 1: Version Range**
+```json
+"incompatible_mods": {
+  "other.mod.id": {"min_version": "1.0.0", "max_version": "2.0.0"}
+}
+```
+- Incompatible with specific version range
+- Versions outside range are compatible
 
-**Enablement Check**: Only discover mods that are "enabled" (mechanism unspecified).
+**Type 2: Specific Versions**
+```json
+"incompatible_mods": {
+  "problematic.mod": ["1.5.0", "1.5.1", "1.6.3"]
+}
+```
+- Incompatible with specific version numbers only
+- All other versions are compatible
+
+**Type 3: Complete Incompatibility**
+```json
+"incompatible_mods": {
+  "conflicting.mod": true
+}
+```
+- Completely incompatible with all versions
+- Cannot coexist under any circumstances
+
+**Conflict Resolution**:
+- **Mutual incompatibility** (both mods list each other): Both disabled
+- **One-way incompatibility** (only Mod A lists Mod B): Only Mod A disabled
+- Disabled mods marked in discovery list with reason
+- IPC warning message sent to disabled mods
+
+**Discovery Flow**:
+```
+1. Discover all mods
+2. Parse incompatibilities for each mod
+3. Build incompatibility matrix
+4. For each mod:
+   a. Check if any discovered mods are in its incompatible list
+   b. Check if versions match incompatibility criteria
+   c. If conflict found:
+      - Check if mutual (both list each other) → disable BOTH
+      - Otherwise → disable ONLY the declaring mod
+5. Send IPC warning to disabled mods with reason
+```
+
+**Example**:
+```
+Mod A: incompatible_mods: {"mod.b": true}
+Mod B: (no incompatibility declaration)
+Result: Mod A DISABLED (declared incompatibility with Mod B)
+
+Mod C: incompatible_mods: {"mod.d": true}
+Mod D: incompatible_mods: {"mod.c": true}
+Result: BOTH Mod C and Mod D DISABLED (mutual incompatibility)
+```
 
 ### 4.2 Current Implementation
 
-**Discovery** ([mod_registry.cpp:discover_mods()](../../src/framework_core/src/mod_registry.cpp)):
-- ✅ Recursively scans `ue4ss\Mods\` for `ap_config.json` files
-- ✅ Parses `mod_id` from JSON
-- ✅ Adds to `discovered_mods_` set (the "promise queue")
-- ❌ **No enablement check** - all discovered mods are expected to register
+**Status**: ❌ **COMPLETELY MISSING**
 
-**Registration** ([framework_core.cpp:handle_mod_registration()](../../src/framework_core/src/framework_core.cpp)):
-- ✅ Validates mod_id exists in discovered_mods_
-- ✅ Stores capabilities
-- ✅ Updates routing tables
-- ✅ Checks if all discovered mods registered
-- ✅ Timeout mechanism (180s default in main.lua)
-
-**Good Faith System**:
-- ✅ Framework trusts mods to fulfill capabilities
-- ✅ No runtime validation of item/location delivery
-- ✅ Mod owns enforcement of its promises
+**What Doesn't Exist**:
+- No `incompatible_mods` field parsing
+- No incompatibility checking logic
+- No conflict matrix construction
+- No auto-disabling logic
+- No mutual incompatibility detection
+- No IPC warning messages
 
 ### 4.3 Gap Analysis
 
 | Feature | Intended | Current | Status |
 |---------|----------|---------|--------|
-| JSON scanning | Required | Recursive filesystem scan | ✅ **Complete** |
-| Promise queue | Required | discovered_mods_ set | ✅ **Complete** |
-| Enablement check | "if enabled" | No check | ❌ **Missing** |
-| Registration timeout | 3 minutes | 180s (configurable) | ✅ **Complete** |
-| Good faith system | Required | Implemented | ✅ **Complete** |
+| Incompatibility schema | Required | Not present | ❌ **Missing** |
+| Version range check | Required | Not implemented | ❌ **Missing** |
+| Specific version check | Required | Not implemented | ❌ **Missing** |
+| Complete ban check | Required | Not implemented | ❌ **Missing** |
+| Mutual incompatibility | Required | Not implemented | ❌ **Missing** |
+| Auto-disabling | Required | Not implemented | ❌ **Missing** |
+| IPC warnings | Required | Not implemented | ❌ **Missing** |
 
-**Enablement Mechanism Options**:
-1. Check for `enabled.txt` in mod folder (UE4SS convention)
-2. Parse `ue4ss/Mods/mods.txt` for enabled mods
-3. Check JSON field: `"enabled": true`
+**Impact**: Conflicting mods can register and run, causing crashes, data corruption, or unexpected behavior.
 
-**Recommendation**: Implement enablement check using `enabled.txt` or `mods.txt` parsing.
+**Implementation Priority**: 🔴 **CRITICAL** - Must be Phase 1
 
 ---
 
-## 5. Mod Load Order and C++ Mod Support
+## 5. Runtime Enablement System (NEW - CRITICAL)
 
 ### 5.1 Intended Design
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
+**Purpose**: Allow framework (and framework mod with special privilege) to enable/disable mods at runtime.
 
-> **Mods:**
-> - Must be loaded by UE4SS **after** the framework has loaded
-> - We can do so by having users modify their `ue4ss/mods/mods.json` and/or `ue4ss/mods/mods.txt` files, ensuring that the framework is loaded before any AP-enabled mods
+**Capabilities**:
+- Disable mods due to conflicts (automatic)
+- Disable mods due to missing dependencies (automatic)
+- Disable/enable mods via framework mod commands (manual)
+- Persist enablement state to mod's `ap_config.json` file
 
-> **UE4SS C++ mods:**
-> - UE4SS typically loads them **before** any UE4SS Lua mods
-> - They would have to **delay registration** with the framework
-> - Figure out when the best time to register would be (possibly using UE4SS-based reflection to know if or when the framework is loaded, or simply just periodically attempting registration until they finally receive a response message from the framework)
+**Implementation**:
+```
+In-Memory State:
+  discovered_mods_[mod_id].enabled = true/false
+
+On Disk:
+  mod_folder/ap_config.json:
+    "enabled": true/false
+
+Runtime Modification:
+  framework.disable_mod(mod_id, reason)
+    → Set enabled=false in memory
+    → Write to ap_config.json
+    → Send IPC message to mod (if registered)
+    → Log reason to framework log
+```
+
+**Special Privileges**:
+- `APFrameworkCore` C++ library: Can disable any mod
+- Lua framework mod (as priority client): Can disable any mod via IPC command
+- Regular mods: Cannot disable other mods
+
+**Use Cases**:
+1. Auto-disable on conflict detected
+2. Auto-disable on missing dependency
+3. Manual disable via framework command (future UI)
+4. User edits `ap_config.json` manually → respected on next startup
 
 ### 5.2 Current Implementation
 
-**Lua Mod Support** ([src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua)):
-- ✅ Pure Lua IPC client library
-- ✅ Auto-connect on creation
-- ✅ Auto-reconnect on poll (handles framework not ready)
-- ✅ Works for Lua mods loaded after framework
+**Status**: ⚠️ **PARTIALLY IMPLEMENTED**
 
-**C++ Mod Support** ([src/client_lib/ap_client_lib.cpp](../../src/client_lib/src/ap_client_lib.cpp)):
-- ✅ C API library exists
-- ✅ Auto-connect on create
-- ✅ Auto-reconnect on poll
-- ⚠️ **No documented retry strategy for early-loaded C++ mods**
-- ⚠️ **No example showing delayed registration**
+**What Exists**:
+- Discovery can filter mods (filesystem scan)
+- `enabled.txt` file check mentioned in redesign docs
 
-**Load Order Enforcement**:
-- ❌ No documentation on how to configure `mods.txt` / `mods.json`
-- ❌ No validation that framework loaded before mods
-- ❌ No error message if load order is wrong
+**What's Missing**:
+- ❌ No `enabled` field in `ap_config.json`
+- ❌ No in-memory enablement tracking
+- ❌ No runtime modification API
+- ❌ No file writing on enablement change
+- ❌ No IPC message for disabled mods
+- ❌ No special privilege system for framework mod
 
 ### 5.3 Gap Analysis
 
 | Feature | Intended | Current | Status |
 |---------|----------|---------|--------|
-| Lua mod support | After framework | Lua client library | ✅ **Complete** |
-| C++ mod support | Before framework | C++ library exists | ⚠️ **Partial** |
-| Delayed registration | Required for C++ | Auto-reconnect exists | ⚠️ **Implicit** |
-| Load order docs | Required | Not documented | ❌ **Missing** |
-| Load order enforcement | User responsibility | Not enforced | ❌ **Not Enforced** |
+| Enabled field in config | Required | Not present | ❌ **Missing** |
+| In-memory tracking | Required | Not implemented | ❌ **Missing** |
+| Runtime disable API | Required | Not implemented | ❌ **Missing** |
+| File persistence | Required | Not implemented | ❌ **Missing** |
+| IPC notification | Required | Not implemented | ❌ **Missing** |
+| Special privileges | Required | Not implemented | ❌ **Missing** |
+| Manual user editing | Required | Would work if field existed | ⚠️ **Partial** |
 
-**Issues**:
-1. C++ mods loaded early may attempt registration before IPC server starts
-2. Auto-reconnect handles this, but it's not documented
-3. No example C++ mod showing best practices
-4. Users don't know how to configure load order
+**Impact**: Cannot auto-resolve conflicts, cannot disable problematic mods at runtime, no conflict resolution mechanism.
 
-**Recommendation**:
-- Document load order configuration in README
-- Provide example C++ mod with retry logic
-- Consider adding framework readiness beacon (named event/mutex)
+**Implementation Priority**: 🔴 **CRITICAL** - Must be Phase 1
 
 ---
 
-## 6. Capability Generation and APCapabilities.json
+## 6. Multi-Slot APCapabilities (NEW - CRITICAL)
 
 ### 6.1 Intended Design
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
+**Purpose**: Support multiple Palworld players in a single Archipelago multiworld.
 
-> Once all registration has been completed, [framework generates] `APCapabilities.json`
+**File Naming**:
+```
+APCapabilities_<slot_name>.json
+```
 
-**Expected Flow**:
-1. Game starts → Framework discovers mods
-2. Mods register with capabilities
-3. All discovered mods registered → Generate APCapabilities.json
-4. User exits game
-5. User opens Archipelago → Installs palworld.apworld
-6. User clicks Generate → apworld reads APCapabilities.json
-7. User restarts game → Framework connects to AP server
+**Source of Slot Name**:
+```json
+// framework_config.json
+{
+  "slot_name": "Player1"
+}
+```
+
+**Generated Files**:
+```
+APCapabilities_Player1.json
+APCapabilities_Player2.json
+APCapabilities_P1.json
+// etc. (one per player/slot)
+```
+
+**Generation Behavior**:
+- Framework generates capability file with slot-specific name
+- Log full absolute path when generating
+- Never auto-delete old files (user can manually clean up)
+- Each generation overwrites same-named file (e.g., if slot_name changes mid-session)
+
+**AP World Usage**:
+- Host collects `APCapabilities_*.json` files from ALL players
+- Provides multiple files to world generator (one per Palworld slot)
+- World merges capabilities and generates multiworld
+
+**Example Multi-Player Setup**:
+```
+Player 1 (slot: "P1"):
+  - Generates APCapabilities_P1.json
+  - Includes mods: ChestShuffle, TechTree, Breeding
+
+Player 2 (slot: "P2"):
+  - Generates APCapabilities_P2.json
+  - Includes mods: ChestShuffle, BossShuffle
+
+Host:
+  - Collects APCapabilities_P1.json and APCapabilities_P2.json
+  - Runs AP generator with both files
+  - Generates multiworld with distinct item pools per player
+```
 
 ### 6.2 Current Implementation
 
-**Generation** ([capabilities_generator.cpp](../../src/framework_core/src/capabilities_generator.cpp)):
-- ✅ Aggregates items/locations/regions from all mods
-- ✅ Writes to `APCapabilities.json` in root directory
-- ✅ JSON format matches expected structure
-- ✅ Includes mod_id attribution for each entry
+**Status**: ❌ **COMPLETELY MISSING**
 
-**Trigger** ([main.lua:WAIT_REG state](../../APFramework/Scripts/main.lua)):
-- ✅ Generated when all discovered mods register
-- ✅ Also generated on timeout (partial registration)
-- ✅ Written to file immediately
+**What Exists**:
+- ✅ Single capability generation works
+- ✅ `slot_name` field exists in `framework_config.json`
 
-**JSON Structure**:
-```json
-{
-  "items": [
-    {"id": 100000, "name": "Item", "classification": "useful", "mod_id": "ModA"}
-  ],
-  "locations": [
-    {"id": 200000, "name": "Location", "region": "Region", "mod_id": "ModA"}
-  ],
-  "regions": [
-    {"name": "Region", "connects_to": ["Other"], "locations": [200000], "mod_id": "ModA"}
-  ]
-}
+**What's Missing**:
+- ❌ **Hardcoded filename**: `APCapabilities.json` (no slot name)
+- ❌ No dynamic filename generation
+- ❌ No full path logging
+- ❌ Single-slot assumption throughout codebase
+
+**Current Code**:
+```lua
+-- APFramework/Scripts/main.lua:14
+CAPABILITIES_PATH = "APCapabilities.json"  -- HARDCODED
 ```
 
 ### 6.3 Gap Analysis
 
 | Feature | Intended | Current | Status |
 |---------|----------|---------|--------|
-| Capability aggregation | Required | Implemented | ✅ **Complete** |
-| JSON generation | Required | Implemented | ✅ **Complete** |
-| File output | APCapabilities.json | APCapabilities.json | ✅ **Complete** |
-| Trigger | After all register | After all or timeout | ✅ **Complete** |
-| Mod attribution | Implied | mod_id in each entry | ✅ **Complete** |
+| Slot-based filename | Required | Hardcoded single file | ❌ **Missing** |
+| Dynamic naming | Required | Not implemented | ❌ **Missing** |
+| Full path logging | Required | Relative path only | ❌ **Missing** |
+| Multi-slot support | Required | Single slot only | ❌ **Missing** |
+| File preservation | Required | Overwrites same file | ⚠️ **Partial** |
 
-**Conclusion**: Capability generation is **fully aligned** with intended design.
+**Impact**: Cannot support multiple Palworld players in multiworld. All players would overwrite the same `APCapabilities.json` file.
+
+**Files to Modify**:
+- [APFramework/Scripts/main.lua](../../APFramework/Scripts/main.lua) - Dynamic filename
+- [src/framework_core/src/capabilities_generator.cpp](../../src/framework_core/src/capabilities_generator.cpp) - Accept filename parameter
+
+**Implementation Priority**: 🔴 **CRITICAL** - Must be Phase 1
 
 ---
 
-## 7. IPC Protocol and Message Flow
+## 7. Capabilities Validation (Zero-Tolerance)
 
 ### 7.1 Intended Design
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md) (inferred from flow):
+**Purpose**: Ensure **ZERO CONFLICTS** before generation. Block generation if any issues detected.
 
-**Framework → Mod**:
-- Item received notifications
-- Location checked confirmations
-- Connection status updates
-- Registration acknowledgment
+**Validation Rules**:
+1. **Item ID Collisions**: No two mods can claim same item ID
+2. **Location ID Collisions**: No two mods can claim same location ID
+3. **Region Name Collisions**: No two mods can define same region name
+4. **Dependency Cycles**: No circular dependencies
+5. **Missing Dependencies**: All dependencies must exist
+6. **Incompatibility Conflicts**: Conflicting mods must be disabled
+7. **Custom Field Conflicts**: Extensible validation for custom capabilities
 
-**Mod → Framework**:
-- Registration with capabilities
-- Location check requests
-- Connection requests
-- Status updates
+**Behavior on Conflict**:
+- **BLOCK** generation (do not create APCapabilities file)
+- **LOG** all conflicts with details
+- **BROADCAST** errors to all mods via IPC
+- **DISPLAY** errors in UE4SS console (via framework mod)
+- **REQUIRE** user/developer resolution before proceeding
+
+**Error Message Example**:
+```
+[APFramework] [ERROR] Capability generation FAILED
+[APFramework] [ERROR] Item ID collision detected:
+  - Mod: author1.palworld.mod1 claims ID 100042 (name: "Super Pickaxe")
+  - Mod: author2.palworld.mod2 claims ID 100042 (name: "Magic Sword")
+[APFramework] [ERROR] Resolution: Mods must use unique ID ranges
+[APFramework] [ERROR] APCapabilities.json NOT generated
+```
 
 ### 7.2 Current Implementation
 
-**Transport**: Windows Named Pipes (`\\.\pipe\APFramework_default`)
+**Status**: ⚠️ **PARTIAL - NOT ZERO-TOLERANCE**
 
-**Message Format** ([ipc_server.cpp](../../src/framework_core/src/ipc_server.cpp)):
-```json
-{
-  "type": "message_type",
-  "mod_id": "ModIdentifier",
-  "data": { /* payload */ }
+**What Exists**:
+- ✅ `validate()` method in CapabilitiesGenerator
+- ✅ Implicit collision detection via map structure (silent overwrites)
+
+**What's Missing**:
+- ❌ **Not zero-tolerance**: Validation returns errors but doesn't halt generation
+- ❌ No explicit item ID collision checking
+- ❌ No explicit location ID collision checking
+- ❌ No explicit region name collision checking
+- ❌ No dependency cycle detection
+- ❌ No broadcast of errors to mods
+- ❌ Generation proceeds even with conflicts
+
+**Current Code**:
+```cpp
+// capabilities_generator.cpp
+bool CapabilitiesGenerator::validate() {
+    // Returns true/false but caller may ignore
+    // No blocking behavior enforced
 }
 ```
 
-**Implemented Message Types**:
-
-**Mod → Framework**:
-- ✅ `register` - Mod registration with capabilities
-- ✅ `location_check` - Check location
-- ✅ `connect` - Request AP connection
-- ✅ `status_update` - Send status
-
-**Framework → Mod**:
-- ✅ `item_received` - Item delivered
-- ✅ `location_checked` - Location confirmed
-- ✅ `slot_connected` - Connected to AP
-- ✅ `disconnected` - Disconnected from AP
-- ✅ `registration_complete` - All mods registered
-
 ### 7.3 Gap Analysis
 
-| Feature | Intended | Current | Status |
-|---------|----------|---------|--------|
-| Bidirectional IPC | Required | Named Pipes | ✅ **Complete** |
-| Registration message | Required | Implemented | ✅ **Complete** |
-| Item received | Required | Implemented | ✅ **Complete** |
-| Location check | Required | Implemented | ✅ **Complete** |
-| Connection status | Required | Implemented | ✅ **Complete** |
-| JSON payload | Implied | Implemented | ✅ **Complete** |
+| Validation Type | Intended | Current | Status |
+|----------------|----------|---------|--------|
+| Item ID collision | Block generation | Passive check | ❌ **Not Enforced** |
+| Location ID collision | Block generation | Passive check | ❌ **Not Enforced** |
+| Region name collision | Block generation | Not checked | ❌ **Missing** |
+| Dependency cycles | Block generation | Not checked | ❌ **Missing** |
+| Missing dependencies | Block generation | Not checked | ❌ **Missing** |
+| Incompatibility conflicts | Block generation | Not checked | ❌ **Missing** |
+| Error broadcasting | Required | Not implemented | ❌ **Missing** |
+| Zero-tolerance enforcement | Required | Not enforced | ❌ **CRITICAL** |
 
-**Additional Features** (not in intended design):
-- ✅ `registration_complete` broadcast (good addition)
-- ✅ Per-mod message queues (improves reliability)
-- ✅ Thread-safe message routing
+**Impact**: Conflicting capabilities can be generated, causing server errors or unpredictable behavior in AP multiworld.
 
-**Conclusion**: IPC protocol is **fully aligned** and includes beneficial additions.
+**Files to Modify**:
+- [src/framework_core/src/capabilities_generator.cpp](../../src/framework_core/src/capabilities_generator.cpp) - Enforce blocking
+- [src/framework_core/src/framework_core.cpp](../../src/framework_core/src/framework_core.cpp) - Check validation before generation
+
+**Implementation Priority**: 🔴 **HIGH** - Must be Phase 2
 
 ---
 
-## 8. Runtime Flow Comparison
+## 8. Log Routing to Framework Mod (NEW - CRITICAL)
 
-### 8.1 Intended Flow
+### 8.1 Intended Design
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
+**Purpose**: Display important framework logs in UE4SS console for user visibility.
 
+**Architecture**:
 ```
-1. Run Palworld → UE4SS loads framework → discovers mod capabilities → generates APCapabilities.json once all mods register
-2. Open Archipelago → Install palworld.apworld → Generate (reads APCapabilities.json) → Host
-3. Restart Palworld → Framework waits for all mods to register → connects to AP → main loop begins
-4a. AP server sends item → framework routes to mod → mod enforces capability
-4b. Mod finds location check → sends to framework → framework notifies server → server notifies other game
+C++ Logger
+  ↓ (filter by log_mode)
+IPC Message (type: "log")
+  ↓
+Lua Framework Mod (priority client)
+  ↓ (print to console)
+UE4SS Console
+  ↓ (automatic)
+ue4ss/UE4SS.log
 ```
 
-### 8.2 Current Flow
+**Log Verbosity Configuration**:
+```json
+// framework_config.json
+{
+  "log_mode": "framework_only",  // or "all", "minimal"
+  "log_verbosity": "info",  // or "debug", "warning", "error"
+}
+```
 
-```
-1. Run Palworld → UE4SS loads APFramework mod
-   ↓
-2. APFramework initializes → starts IPC server → discovers mods (scans ap_config.json)
-   ↓
-3. Mods load → connect to IPC → register with capabilities
-   ↓
-4. All mods registered (or timeout) → generate APCapabilities.json
-   ↓
-5. [User exits game, sets up Archipelago with APCapabilities.json, restarts game]
-   ↓
-6. APFramework discovers mods again → waits for registration again
-   ↓
-7. All registered → connect to AP server (if autoconnect) → start polling
-   ↓
-8a. AP server sends ItemReceived → PollingThread → MessageRouter → IPC → Mod receives
-8b. Mod checks location → IPC → FrameworkCore → APClient → AP server
-```
+**Log Modes**:
+- `"minimal"`: Errors only
+- `"framework_only"`: Framework INFO/WARNING/ERROR (no DEBUG, no mod logs)
+- `"all"`: All logs from framework and mods
+
+**Default**: `"framework_only"` with `"info"` verbosity
+
+**Message Flow**:
+1. C++ code calls `LOG_INFO("Message")`
+2. Logger checks `log_mode` and `log_verbosity`
+3. If important, send IPC message to `archipelago.palworld.framework`
+4. Framework mod receives `{type: "log", level: "INFO", message: "..."}`
+5. Framework mod prints: `print("[APFramework] [INFO] Message")`
+6. UE4SS automatically writes to `UE4SS.log`
+
+### 8.2 Current Implementation
+
+**Status**: ❌ **COMPLETELY MISSING**
+
+**What Exists**:
+- ✅ Logger writes to file `framework.log`
+- ✅ Lua mod can print to UE4SS console (basic)
+
+**What's Missing**:
+- ❌ No `log_mode` or `log_verbosity` in `framework_config.json`
+- ❌ No IPC message type `"log"` for framework→mod communication
+- ❌ No filtering logic in Logger
+- ❌ No framework mod registration as priority client (can't receive logs)
+- ❌ No message pump in framework mod to print logs
 
 ### 8.3 Gap Analysis
 
-| Step | Intended | Current | Status |
-|------|----------|---------|--------|
-| Framework loads | On game start | On game start | ✅ **Aligned** |
-| Mod discovery | On load | On load | ✅ **Aligned** |
-| APCapabilities.json generation | After registration | After registration | ✅ **Aligned** |
-| Re-discovery on restart | Yes | Yes | ✅ **Aligned** |
-| AP connection | After re-registration | After re-registration | ✅ **Aligned** |
-| Item routing | Framework to mod | Framework to mod | ✅ **Aligned** |
-| Location checking | Mod to framework to AP | Mod to framework to AP | ✅ **Aligned** |
+| Feature | Intended | Current | Status |
+|---------|----------|---------|--------|
+| log_mode config | Required | Not present | ❌ **Missing** |
+| log_verbosity config | Required | Not present | ❌ **Missing** |
+| IPC log messages | Required | Not implemented | ❌ **Missing** |
+| Log filtering | Required | Not implemented | ❌ **Missing** |
+| Framework mod receives logs | Required | Not implemented | ❌ **Missing** |
+| Console printing | Required | Not implemented | ❌ **Missing** |
 
-**Conclusion**: Runtime flow is **fully aligned** with intended design.
+**Impact**: Users cannot see framework errors/warnings without checking `framework.log` file. Debugging is significantly harder.
+
+**Files to Modify**:
+- [APFramework/framework_config.json](../../APFramework/framework_config.json) - Add log_mode, log_verbosity
+- [src/framework_core/src/logger.cpp](../../src/framework_core/src/logger.cpp) - Add IPC routing
+- [src/framework_core/src/framework_core.cpp](../../src/framework_core/src/framework_core.cpp) - Handle "log" IPC messages
+- [APFramework/Scripts/main.lua](../../APFramework/Scripts/main.lua) - Print received logs
+
+**Implementation Priority**: 🔴 **HIGH** - Must be Phase 1
 
 ---
 
-## 9. Client Libraries
+## 9. Lua Client Library JSON Integration
 
 ### 9.1 Intended Design
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
+**Purpose**: Provide seamless JSON encoding/decoding for Lua mod developers using lunajson.
 
-> We should provide a **minimal C/C++ library** with Lua C bindings (and Lua wrapper, for UE4SS Lua mods) for these mods to utilize. This library will act as an IPC client, with:
-> - JSON support
-> - Logging support
-> - Various other helper functions
+**API**:
+```lua
+local ap_client = require("ap_client")
+local client = ap_client:new("author.game.mod")
 
-> For UE4SS C++ mods, we provide a **static `*.lib` file and headers** to include, so that UE4SS C++ mods can link against the library and call methods directly.
+-- Mods work with Lua tables, not JSON strings
+client:register({
+    items = {
+        {id = 100000, name = "Item", classification = "useful"}
+    },
+    locations = {
+        {id = 200000, name = "Location", region = "Region"}
+    }
+})
+-- ap_client automatically encodes to JSON for IPC
+
+-- Receiving
+client.on_item_received = function(item_data)
+    -- item_data is already a Lua table (auto-decoded from JSON)
+    print("Received item ID: " .. item_data.item_id)
+end
+```
+
+**Integration**:
+- Use `lunajson` library (pure Lua, no dependencies)
+- Automatically encode outgoing messages (Lua table → JSON string)
+- Automatically decode incoming messages (JSON string → Lua table)
+- Zero manual JSON handling by mod developers
 
 ### 9.2 Current Implementation
 
-**Lua Client Library** ([src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua)):
-- ✅ Pure Lua IPC client
-- ✅ JSON encoder/decoder (basic, regex-based)
-- ⚠️ **No logging support** (mods must implement their own)
-- ✅ Helper functions: register, poll, check_location, request_connection
-- ✅ Callback system: on_item_received, on_location_checked, etc.
+**Status**: ⚠️ **CUSTOM IMPLEMENTATION (NO lunajson)**
 
-**C++ Client Library** ([src/client_lib/](../../src/client_lib/)):
-- ✅ C API wrapper (ap_client_lib.h)
-- ✅ Named Pipe client (ipc_client.cpp)
-- ✅ JSON support (nlohmann/json)
-- ⚠️ **No logging support** (mods must implement their own)
-- ✅ Callback system with user_data pointers
-- ⚠️ **Builds as DLL, not static .lib** (requires APClientLib.dll deployment)
+**What Exists**:
+- ✅ Custom JSON encoder/decoder in [src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua) (lines 8-96)
+- ✅ Auto-encode/decode works for simple cases
+
+**What's Missing**:
+- ❌ No `lunajson` integration
+- ⚠️ Custom JSON implementation is fragile (limited features)
+
+**Current Code**:
+```lua
+-- ap_client.lua:8-96
+-- Custom JSON implementation using string.match and patterns
+-- Works for basic objects/arrays but may fail on complex JSON
+```
 
 ### 9.3 Gap Analysis
 
 | Feature | Intended | Current | Status |
 |---------|----------|---------|--------|
-| Lua client library | Required | ap_client.lua | ✅ **Complete** |
-| Lua wrapper | Required | Object-oriented API | ✅ **Complete** |
-| C++ client library | Required | ap_client_lib | ✅ **Complete** |
-| JSON support | Required | Implemented (both) | ✅ **Complete** |
-| Logging support | Required | **Not implemented** | ❌ **Missing** |
-| Helper functions | Required | Implemented | ✅ **Complete** |
-| Static .lib | Required | **DLL instead** | ⚠️ **Different** |
-| Headers | Required | Provided | ✅ **Complete** |
+| lunajson library | Required | Not included | ❌ **Missing** |
+| Auto-encode Lua tables | Required | Custom impl works | ⚠️ **Partial** |
+| Auto-decode JSON strings | Required | Custom impl works | ⚠️ **Partial** |
+| Robust JSON handling | Required | Limited | ⚠️ **Fragile** |
 
-**Issues**:
-1. **Logging**: Mods expected to implement their own (not provided by library)
-2. **Static vs DLL**: C++ library is DLL, not static .lib → requires distribution
-3. **JSON in Lua**: Basic regex parser, not robust for complex JSON
+**Impact**: Complex JSON structures may fail to parse/encode. Mods with nested data or special characters may encounter issues.
 
-**Recommendation**:
-- Add optional logging callback to client libraries
-- Provide static .lib build option for C++ mods
-- Consider including a proper Lua JSON library (e.g., dkjson)
+**Files to Modify**:
+- [src/lua_client/ap_client.lua](../../src/lua_client/ap_client.lua) - Replace custom JSON with lunajson
+- Add `lunajson.lua` to project
+
+**Implementation Priority**: 🟡 **MEDIUM** - Phase 2
 
 ---
 
-## 10. Design Philosophy Alignment
+## 10. AP World Python Support
 
-### 10.1 Intended Philosophy
+### 10.1 Intended Design
 
-From [DESIGN_AND_FLOW.md](DESIGN_AND_FLOW.md):
+**Purpose**: Python AP world must read and adapt to `APCapabilities_<slot>.json` files.
 
-> The main design philosophy here is that **mods are responsible** for telling the system what they are capable of, since without a mod there would never be anything to randomize in the first place. It's not entirely 100% static generation, because Palworld requires a lot of specialized runtime mod operations. So we made it extensible instead, where mods literally determine what is possible from the start, and **on good faith they fulfill their contractual promises** to the system.
+**Features**:
+- Read multiple capability files (one per Palworld slot)
+- Parse mod capabilities (items, locations, regions)
+- Generate multiworld with dynamic content
+- Validate capabilities (warnings for conflicts)
+- Log mod names for debugging
 
-> Essentially, we have this design to solve the Palworld-specific issue of having a single, large, monolithic, "all-in-one" pre-defined mod, which is prone to stability issues and crashes. Instead, we leave it open to the modding community via providing an **open, extensible framework** which any size mod or set of mods can work collaboratively to create different experiences in Archipelago, and hopefully without disturbing or drastically modifying a normal UE4SS ecosystem.
+### 10.2 Current Implementation
 
-### 10.2 Current Implementation Alignment
+**Status**: ✅ **ALREADY IMPLEMENTED (ADVANCED)**
 
-**Mod Responsibility**:
-- ✅ Mods declare capabilities in `ap_config.json`
-- ✅ Framework trusts mods to fulfill promises
-- ✅ No runtime validation of capability enforcement
-- ✅ Mods own their item/location logic
+**What Exists**:
+- ✅ Python world code in [worlds/palworld/](../../worlds/palworld/)
+- ✅ ModCapabilityManager in [mod_interface.py](../../worlds/palworld/mod_interface.py)
+- ✅ Dynamic capability loading from `APCapabilities.json`
+- ✅ Mod metadata parsing (id, name, version, author, description)
+- ✅ Conflict declarations supported
+- ✅ Extensible schema (base + custom fields)
 
-**Good Faith System**:
-- ✅ Framework routes messages based on declared ownership
-- ✅ No verification that mod actually grants items
-- ✅ Assumes mods will check locations as promised
+**Code Evidence**:
+```python
+# worlds/palworld/__init__.py:88-110
+def _load_capability_manifest(self):
+    manifest_path = self.options.capability_manifest_path.value or "APCapabilities.json"
+    self.capability_manifest = self.capability_manager.load_manifest(manifest_path)
+    if self.capability_manifest:
+        self._merge_mod_capabilities()
+```
 
-**Extensibility**:
-- ✅ Any number of mods can register
-- ✅ Capabilities aggregated dynamically
-- ✅ No hardcoded item/location lists
-- ✅ Clean separation: framework handles AP/IPC, mods handle game logic
+**Mod Interface**:
+```python
+# worlds/palworld/mod_interface.py
+@dataclass
+class ModInfo:
+    id: str
+    name: str
+    version: str
+    author: Optional[str]
+    description: Optional[str]
 
-**Minimal Footprint**:
-- ✅ Framework is standalone UE4SS mod
-- ✅ Doesn't modify other mods
-- ✅ Doesn't require UE4SS modifications
-- ✅ Non-AP mods can coexist
+@dataclass
+class ConflictDeclaration:
+    mod_id: str
+    reason: str
+```
 
-### 10.3 Alignment Assessment
+### 10.3 Gap Analysis
 
-| Principle | Intended | Current | Status |
-|-----------|----------|---------|--------|
-| Mod responsibility | Core principle | Fully implemented | ✅ **Aligned** |
-| Good faith system | Core principle | Fully implemented | ✅ **Aligned** |
-| Extensibility | Core principle | Fully implemented | ✅ **Aligned** |
-| Collaborative mods | Goal | Supported | ✅ **Aligned** |
-| Avoid monolithic design | Goal | Achieved | ✅ **Aligned** |
-| UE4SS compatibility | Goal | Achieved | ✅ **Aligned** |
+| Feature | Intended | Current | Status |
+|---------|----------|---------|--------|
+| Read APCapabilities.json | Required | Implemented | ✅ **Complete** |
+| Dynamic capability loading | Required | Implemented | ✅ **Complete** |
+| Mod metadata parsing | Required | Implemented | ✅ **Complete** |
+| Conflict detection | Required | Implemented | ✅ **Complete** |
+| Multi-slot support | Required | Needs testing | ⚠️ **Unclear** |
+| Custom field extensibility | Required | Implemented | ✅ **Complete** |
 
-**Conclusion**: The current implementation **perfectly embodies** the intended design philosophy.
+**Python World is MORE Advanced Than Framework!**
+
+**Potential Issues**:
+- Python expects single file path from options, may need multi-file support
+- Dependency schema may not match (need to verify)
+- Incompatibility schema may not match (need to verify)
+
+**Files to Check**:
+- [worlds/palworld/options.py](../../worlds/palworld/options.py) - Check if multi-file option exists
+- [worlds/palworld/mod_interface.py](../../worlds/palworld/mod_interface.py) - Verify schema matches C++ schema
+
+**Implementation Priority**: 🟡 **MEDIUM** - Phase 2 verification/update
 
 ---
 
 ## 11. Missing Features Summary
 
-### Critical Missing Features (Red Flags)
+### Critical Missing Features (RED - Phase 1)
 
-1. **Framework→UE4SS Console Logging**
-   - **Impact**: Critical errors invisible to users
-   - **Complexity**: Medium (need message pump + Lua polling)
-   - **Priority**: 🔴 **High**
+1. **Framework Mod Dual-Role** (🔴 CRITICAL)
+   - Framework mod must register as priority client
+   - Must use both framework lib AND client lib
+   - Mod ID: `archipelago.palworld.framework`
+   - **Impact**: Cannot demonstrate client library, cannot receive framework logs
 
-2. **Rich Mod Metadata Schema**
-   - **Impact**: No versioning, incompatibility checking, or game version validation
-   - **Complexity**: Medium (extend JSON schema + validation)
-   - **Priority**: 🔴 **High**
+2. **Dependency System** (🔴 CRITICAL)
+   - Hard requirements enforcement
+   - Registration denial if missing
+   - Cascade disabling
+   - **Impact**: Mods load without dependencies → crashes
 
-3. **Mod ID Format Enforcement**
-   - **Impact**: Poor mod namespacing, collision risk
-   - **Complexity**: Low (regex validation)
-   - **Priority**: 🟡 **Medium**
+3. **Incompatibility System** (🔴 CRITICAL)
+   - Three incompatibility types
+   - Auto-disable conflicting mods
+   - Mutual incompatibility detection
+   - **Impact**: Conflicting mods run together → crashes/corruption
 
-### Important Missing Features (Yellow Flags)
+4. **Runtime Enablement** (🔴 CRITICAL)
+   - Editable `enabled` field in config
+   - In-memory + file persistence
+   - Auto-disable on conflicts
+   - **Impact**: No conflict resolution mechanism
 
-4. **Mod Enablement Check**
-   - **Impact**: Discovers disabled mods, timeout waiting for them
-   - **Complexity**: Low (check enabled.txt or parse mods.txt)
-   - **Priority**: 🟡 **Medium**
+5. **Multi-Slot APCapabilities** (🔴 CRITICAL)
+   - Filename: `APCapabilities_<slot>.json`
+   - Dynamic naming from config
+   - Full path logging
+   - **Impact**: Cannot support multiple Palworld players
 
-5. **Client Library Logging Support**
-   - **Impact**: Mods can't easily integrate with framework logging
-   - **Complexity**: Medium (add logging callback API)
-   - **Priority**: 🟡 **Medium**
+6. **Log Routing to Framework Mod** (🔴 HIGH)
+   - IPC log messages
+   - log_mode / log_verbosity config
+   - Framework mod prints to UE4SS console
+   - **Impact**: Users can't see errors → debugging impossible
 
-6. **Static .lib Build for C++ Mods**
-   - **Impact**: Requires DLL deployment, more complex setup
-   - **Complexity**: Low (add CMake static library target)
-   - **Priority**: 🟡 **Medium**
+### Important Missing Features (YELLOW - Phase 2)
 
-7. **Load Order Documentation**
-   - **Impact**: Users don't know how to configure UE4SS
-   - **Complexity**: Low (write docs)
-   - **Priority**: 🟡 **Medium**
+7. **Zero-Tolerance Capabilities Validation** (🟡 HIGH)
+   - Block generation on ANY conflict
+   - Explicit collision checking
+   - Error broadcasting
+   - **Impact**: Invalid capabilities can be generated
 
-8. **C++ Mod Example**
-   - **Impact**: No reference for C++ mod developers
-   - **Complexity**: Low (write example)
-   - **Priority**: 🟡 **Medium**
+8. **lunajson Integration** (🟡 MEDIUM)
+   - Replace custom JSON implementation
+   - Robust parsing for complex structures
+   - **Impact**: Fragile JSON handling
 
-### Nice-to-Have Features (Green)
+9. **Python World Schema Verification** (🟡 MEDIUM)
+   - Verify multi-slot support
+   - Verify dependency/incompatibility schema match
+   - **Impact**: Framework and world may be incompatible
 
-9. **Semantic Version Validation**
-   - **Impact**: Can't enforce version compatibility
-   - **Complexity**: Medium (semver parser + range checking)
-   - **Priority**: 🟢 **Low**
+### Nice-to-Have Features (GREEN - Phase 3)
 
-10. **Cross-Platform IPC**
-    - **Impact**: Windows-only
-    - **Complexity**: High (add Unix domain sockets)
-    - **Priority**: 🟢 **Low** (Palworld is Windows-only anyway)
+10. **Advanced Error Handling**
+11. **Semantic Version Validation**
+12. **Static .lib Build Option**
 
 ---
 
 ## 12. Strengths of Current Implementation
 
-### 1. Production-Quality Core
+Despite significant gaps, the current implementation has strong foundations:
 
-- ✅ Fully functional C++ framework with all planned components
-- ✅ Thread-safe design with proper synchronization
-- ✅ Real apclientpp integration (not stubbed)
+### Production-Quality Core
+
+- ✅ Two separate libraries (correct architecture)
+- ✅ Clean C++ codebase with proper threading
+- ✅ Real apclientpp integration (WebSocket AP connection)
+- ✅ Named Pipes IPC (reliable, tested)
 - ✅ Comprehensive file logging
-- ✅ Clean architecture with dependency injection
+- ✅ Lua C API bindings (UE4SS compatible)
 
-### 2. Complete Lua Integration
+### Advanced Python World
 
-- ✅ Native Lua C API bindings (UE4SS compatible)
-- ✅ Lifecycle state machine with timeout handling
-- ✅ Auto-reconnect logic in client libraries
-- ✅ Pure Lua client (no C dependencies for Lua mods)
+- ✅ Dynamic capability loading (ahead of framework!)
+- ✅ Mod metadata support
+- ✅ Conflict declarations
+- ✅ Extensible schema
+- ✅ Well-structured code
 
-### 3. Robust IPC System
+### Solid Foundation
 
-- ✅ Multi-threaded Named Pipes server
-- ✅ Per-mod message queues (prevents blocking)
-- ✅ JSON message serialization
-- ✅ Bidirectional communication
-- ✅ Thread-safe routing
-
-### 4. Working End-to-End Flow
-
-- ✅ Mod discovery → registration → capability generation
-- ✅ AP connection → polling → message routing
-- ✅ Item delivery → location checking
-- ✅ Clean shutdown and resource cleanup
-
-### 5. Developer-Friendly
-
-- ✅ Clear separation of concerns
-- ✅ Documented architecture
-- ✅ Example Lua mod provided
-- ✅ Simple client library APIs
+- ✅ All major components exist
+- ✅ Message routing works
+- ✅ Client library exists (just needs integration)
+- ✅ Basic validation exists (needs enforcement)
 
 ---
 
-## 13. Recommendations by Priority
+## 13. Implementation Priorities
 
-### Phase 1: Critical Fixes (Before First Release)
+### Phase 1: Critical Safety Features (MUST HAVE)
 
-1. **Implement Framework→UE4SS Console Logging**
-   - Add message queue in FrameworkCore for "important" log entries
-   - Expose `get_pending_log_messages()` to Lua
-   - Lua polls and prints to console in state machine loop
-   - **Estimate**: 4-6 hours
+**Priority Order**:
+1. Multi-slot APCapabilities (easiest, enables multi-player)
+2. Dependency system (prevents missing dependency crashes)
+3. Incompatibility system (prevents conflict crashes)
+4. Runtime enablement (enables auto-resolution)
+5. Log routing to framework mod (critical for debugging)
+6. Framework mod dual-role (demonstrates client lib usage)
 
-2. **Extend Mod Metadata Schema**
-   - Add fields: version, display_name, description, supported_game_versions, incompatible_mods
-   - Update ModRegistry parsing
-   - Add schema validation
-   - **Estimate**: 6-8 hours
+**Estimated Time**: 5-7 days
 
-3. **Implement Mod Enablement Check**
-   - Check for `enabled.txt` in mod folder
-   - Only discover mods with enabled.txt
-   - **Estimate**: 2-3 hours
+### Phase 2: Validation & Polish (SHOULD HAVE)
 
-### Phase 2: Important Improvements (Before Public Release)
+7. Zero-tolerance capabilities validation
+8. lunajson integration
+9. Python world schema verification
+10. Comprehensive testing
 
-4. **Add Mod ID Format Validation**
-   - Regex: `^[a-z0-9_]+\.[a-z0-9_]+\.[a-z0-9_]+$`
-   - Reject invalid mod_ids during registration
-   - **Estimate**: 2 hours
+**Estimated Time**: 3-4 days
 
-5. **Add Client Library Logging**
-   - Add optional log callback to ap_client_lib
-   - Add log() method to Lua ap_client
-   - **Estimate**: 3-4 hours
+### Phase 3: Advanced Features (NICE TO HAVE)
 
-6. **Write Load Order Documentation**
-   - Document how to configure mods.txt / mods.json
-   - Explain C++ vs Lua load order
-   - **Estimate**: 2-3 hours
+11. Semantic version validation
+12. Static .lib option
+13. Advanced error handling
 
-7. **Create C++ Mod Example**
-   - Example using ap_client_lib
-   - Show delayed registration pattern
-   - **Estimate**: 4-5 hours
+**Estimated Time**: 3-4 days
 
-### Phase 3: Nice-to-Have (Post-Release)
-
-8. **Add Semantic Version Validation**
-   - Parse semver strings
-   - Validate version ranges
-   - Check incompatibility versions
-   - **Estimate**: 8-10 hours
-
-9. **Provide Static .lib Build Option**
-   - Add CMake static library target
-   - Provide both .lib and .dll
-   - **Estimate**: 2-3 hours
-
-10. **Advanced Error Handling**
-    - Retry logic for failed operations
-    - Better error messages
-    - Recovery from transient failures
-    - **Estimate**: 8-12 hours
+**Total**: 11-15 days for complete implementation
 
 ---
 
 ## 14. Conclusion
 
-### Overall Assessment
+### Current State
 
-The current APFramework implementation is **highly aligned** with the intended design, with **~85% feature completeness** relative to the full vision.
+The APFramework has a **solid architectural foundation** with correct library separation, but is **missing critical safety systems** that are essential for the intended design:
 
-**What's Working**:
-- ✅ Core architecture matches intended two-part design
-- ✅ IPC communication fully functional
-- ✅ Mod discovery and registration working
-- ✅ Capability generation and AP integration complete
-- ✅ Design philosophy fully embodied
+- **Architecture**: 70% aligned (library separation correct, dual-role missing)
+- **Features**: 45% complete (core works, safety systems missing)
+- **Quality**: High-quality code, but incomplete
 
-**What's Missing**:
-- ❌ Framework→UE4SS console logging (critical UX issue)
-- ❌ Rich metadata schema (versioning, compatibility)
-- ❌ Mod enablement checking
-- ❌ Some documentation and examples
+### Critical Gaps
 
-**Readiness for Testing**:
-- Core functionality: ✅ **Ready**
-- User experience: ⚠️ **Needs console logging**
-- Mod ecosystem: ⚠️ **Needs metadata validation**
-- Documentation: ⚠️ **Needs examples and guides**
+The **5 critical gaps** that must be addressed:
+1. Framework mod dual-role (priority client)
+2. Dependency system (hard requirements)
+3. Incompatibility system (conflict prevention)
+4. Runtime enablement (conflict resolution)
+5. Multi-slot capabilities (multi-player support)
 
-**Recommendation**:
-The framework is **production-ready for core functionality** but needs **Phase 1 improvements** (console logging, metadata schema, enablement check) before first user-facing release. After Phase 1, it will be a complete, polished implementation of the intended design.
+### Path Forward
 
----
+**Phase 1** implements the critical safety features that make the framework production-ready. Without these features, the framework:
+- Cannot prevent mod conflicts
+- Cannot support multiple players
+- Cannot resolve dependency issues
+- Cannot display errors to users
 
-## Appendix A: Feature Comparison Matrix
+**Phase 2** adds validation enforcement and polish.
 
-| Feature Category | Feature | Intended | Current | Gap |
-|-----------------|---------|----------|---------|-----|
-| **Architecture** | Two-part system | ✅ | ✅ | None |
-| | C++ AP client | ✅ | ✅ | None |
-| | C++ IPC server | ✅ | ✅ | None |
-| | Lua framework mod | ✅ | ✅ | None |
-| | Lua bindings | ✅ | ✅ | None |
-| **Discovery** | JSON scanning | ✅ | ✅ | None |
-| | Promise queue | ✅ | ✅ | None |
-| | Enablement check | ✅ | ❌ | Missing |
-| **Metadata** | mod_id | ✅ | ✅ | Format not enforced |
-| | version | ✅ | ❌ | Missing |
-| | display_name | ✅ | ❌ | Missing |
-| | description | ✅ | ❌ | Missing |
-| | game_version range | ✅ | ❌ | Missing |
-| | incompatible_mods | ✅ | ❌ | Missing |
-| | capabilities | ✅ | ✅ | None |
-| **Registration** | Timeout-based | ✅ | ✅ | None |
-| | All-before-connect | ✅ | ✅ | None |
-| | Good faith system | ✅ | ✅ | None |
-| **Capabilities** | APCapabilities.json | ✅ | ✅ | None |
-| | Item aggregation | ✅ | ✅ | None |
-| | Location aggregation | ✅ | ✅ | None |
-| | Region aggregation | ✅ | ✅ | None |
-| **Logging** | File logging | ✅ | ✅ | None |
-| | UE4SS console pump | ✅ | ❌ | Missing |
-| **IPC** | Bidirectional | ✅ | ✅ | None |
-| | JSON messages | ✅ | ✅ | None |
-| | Registration | ✅ | ✅ | None |
-| | Item delivery | ✅ | ✅ | None |
-| | Location check | ✅ | ✅ | None |
-| **Client Libs** | Lua library | ✅ | ✅ | None |
-| | C++ library | ✅ | ✅ | None |
-| | JSON support | ✅ | ✅ | None |
-| | Logging support | ✅ | ❌ | Missing |
-| | Static .lib | ✅ | ⚠️ | DLL instead |
-| **Load Order** | Framework first | ✅ | ⚠️ | Not documented |
-| | C++ delayed reg | ✅ | ⚠️ | Implicit via reconnect |
-| **Flow** | Runtime flow | ✅ | ✅ | None |
-| | Mod enforcement | ✅ | ✅ | None |
+**Phase 3** adds advanced features for long-term maturity.
 
-**Legend**:
-- ✅ Fully implemented
-- ⚠️ Partially implemented
-- ❌ Missing
+### Recommendation
+
+**Do NOT release** until Phase 1 is complete. The missing features are not "nice-to-have" - they are **critical for safety and usability**. Releasing without them will result in:
+- User frustration (can't see errors)
+- Mod conflicts causing crashes
+- Inability to support multi-player
+- Poor developer experience
+
+Complete Phase 1 first (5-7 days), then release for beta testing.
 
 ---
 
