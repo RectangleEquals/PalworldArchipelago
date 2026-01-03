@@ -8,6 +8,7 @@
 #include "polling_thread.h"
 #include "config_manager.h"
 #include "capabilities_generator.h"
+#include "logger.h"
 
 namespace APFramework {
 
@@ -76,6 +77,7 @@ private:
     std::unique_ptr<PollingThread> polling_thread_;
     std::unique_ptr<ConfigManager> config_manager_;
     std::unique_ptr<CapabilitiesGenerator> capabilities_generator_;
+    std::unique_ptr<Logger> logger_;
 
     std::string pipe_name_;
 

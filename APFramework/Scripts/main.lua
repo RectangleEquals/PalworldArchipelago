@@ -131,6 +131,12 @@ local function register_framework_client()
         print("[APFramework] [PRIORITY CLIENT] Connection status: " .. tostring(connected))
     end
 
+    framework_client.on_log = function(level, component, message)
+        -- Format and display C++ framework logs in UE4SS console
+        local prefix = "[APFrameworkCore][" .. component .. "][" .. level:upper() .. "]"
+        print(prefix .. " " .. message)
+    end
+
     -- Register with empty capabilities (framework mod provides no items/locations)
     local success = framework_client:register({
         items = {},

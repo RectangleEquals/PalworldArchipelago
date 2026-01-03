@@ -6,5 +6,7 @@
   "autoconnect": false,
   "registration_timeout": 180,
   "log_mode": "framework_only",
-  "log_verbosity": "info"
+  "log_verbosity": "info",
+  "log_to_file": true,
+  "log_file_path": "apframework.log"
 }

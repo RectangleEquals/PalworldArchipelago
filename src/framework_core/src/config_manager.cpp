@@ -11,6 +11,9 @@ ConfigManager::ConfigManager() {
     config_.polling_interval_ms = 16; // ~60fps
     config_.enable_logging = true;
     config_.log_level = "info";
+    config_.log_mode = "framework_only";
+    config_.log_to_file = true;
+    config_.log_file_path = "apframework.log";
     config_.active_profile.name = "default";
     config_.active_profile.server = "archipelago.gg";
     config_.active_profile.port = 38281;
@@ -154,6 +157,9 @@ std::string ConfigManager::serialize_to_json() const {
         root["polling_interval_ms"] = config_.polling_interval_ms;
         root["enable_logging"] = config_.enable_logging;
         root["log_level"] = config_.log_level;
+        root["log_mode"] = config_.log_mode;
+        root["log_to_file"] = config_.log_to_file;
+        root["log_file_path"] = config_.log_file_path;
         root["mod_overrides"] = config_.mod_overrides;
 
         return root.dump(4); // 4-space indentation
@@ -196,6 +202,9 @@ bool ConfigManager::deserialize_from_json(const std::string& json_str) {
         config_.polling_interval_ms = root.value("polling_interval_ms", 16);
         config_.enable_logging = root.value("enable_logging", true);
         config_.log_level = root.value("log_level", "info");
+        config_.log_mode = root.value("log_mode", "framework_only");
+        config_.log_to_file = root.value("log_to_file", true);
+        config_.log_file_path = root.value("log_file_path", "apframework.log");
 
         if (root.contains("mod_overrides") && root["mod_overrides"].is_object()) {
             config_.mod_overrides.clear();

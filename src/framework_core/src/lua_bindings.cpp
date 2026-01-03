@@ -1,6 +1,5 @@
 #include "lua_bindings.h"
 #include "framework_core.h"
-#include "logger.h"
 #include <string>
 
 using namespace APFramework;
@@ -15,19 +14,15 @@ static FrameworkCore* check_framework(lua_State* L, int index) {
     return *static_cast<FrameworkCore**>(ud);
 }
 
-// framework.init_logger(log_file_path)
+// framework.init_logger(log_file_path) - DEPRECATED: Logger now integrated into FrameworkCore
 static int lua_init_logger(lua_State* L) {
-    const char* log_file_path = luaL_checkstring(L, 1);
-    Logger::instance().initialize(log_file_path);
-    LOG_INFO("Logger initialized from Lua");
+    // No-op: Logger is now initialized automatically by FrameworkCore
     return 0;
 }
 
 // framework.create(pipe_name) -> handle
 static int lua_framework_create(lua_State* L) {
     const char* pipe_name = luaL_checkstring(L, 1);
-
-    LOG_INFO(std::string("Creating FrameworkCore with pipe: ") + pipe_name);
 
     // Allocate userdata for FrameworkCore*
     FrameworkCore** ud = static_cast<FrameworkCore**>(
@@ -40,14 +35,12 @@ static int lua_framework_create(lua_State* L) {
     luaL_getmetatable(L, FRAMEWORK_METATABLE);
     lua_setmetatable(L, -2);
 
-    LOG_INFO("FrameworkCore created successfully");
     return 1; // Return userdata
 }
 
 // handle:start_ipc()
 static int lua_start_ipc(lua_State* L) {
     FrameworkCore* fw = check_framework(L, 1);
-    LOG_INFO("Starting IPC server");
     fw->start_ipc();
     return 0;
 }
@@ -63,7 +56,6 @@ static int lua_stop_ipc(lua_State* L) {
 static int lua_discover_mods(lua_State* L) {
     FrameworkCore* fw = check_framework(L, 1);
     const char* mods_dir = luaL_checkstring(L, 2);
-    LOG_INFO(std::string("Discovering mods in directory: ") + mods_dir);
     fw->discover_mods(mods_dir);
     return 0;
 }
@@ -86,9 +78,7 @@ static int lua_get_pending_registrations(lua_State* L) {
 // handle:generate_capabilities() -> string (JSON)
 static int lua_generate_capabilities(lua_State* L) {
     FrameworkCore* fw = check_framework(L, 1);
-    LOG_INFO("Generating capabilities JSON");
     std::string result = fw->generate_capabilities();
-    LOG_INFO(std::string("Capabilities generated: ") + std::to_string(result.length()) + " bytes");
     lua_pushstring(L, result.c_str());
     return 1;
 }
@@ -101,13 +91,7 @@ static int lua_connect_ap(lua_State* L) {
     const char* slot_name = luaL_checkstring(L, 4);
     const char* password = luaL_optstring(L, 5, "");
 
-    LOG_INFO(std::string("Connecting to AP server: ") + server + ":" + std::to_string(port) + " as " + slot_name);
     bool result = fw->connect_ap(server, port, slot_name, password);
-    if (result) {
-        LOG_INFO("AP connection initiated successfully");
-    } else {
-        LOG_ERROR("AP connection failed");
-    }
     lua_pushboolean(L, result);
     return 1;
 }
@@ -130,7 +114,6 @@ static int lua_is_connected(lua_State* L) {
 // handle:start_polling()
 static int lua_start_polling(lua_State* L) {
     FrameworkCore* fw = check_framework(L, 1);
-    LOG_INFO("Starting polling thread");
     fw->start_polling();
     return 0;
 }

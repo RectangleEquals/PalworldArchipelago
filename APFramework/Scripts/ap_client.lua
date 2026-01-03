@@ -78,6 +78,7 @@ function APClient:new(mod_id, pipe_name)
         on_location_checked = nil,
         on_connection_status = nil,
         on_registration_complete = nil,
+        on_log = nil,
 
         -- Internal state
         message_queue = {}
@@ -176,6 +177,14 @@ function APClient:_process_message(message_str)
     elseif msg_type == "registration_complete" then
         if self.on_registration_complete then
             self.on_registration_complete()
+        end
+    elseif msg_type == "log" then
+        if self.on_log then
+            self.on_log(
+                data.level or "info",
+                data.component or "Unknown",
+                data.message or ""
+            )
         end
     end
 end

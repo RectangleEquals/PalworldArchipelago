@@ -13,11 +13,33 @@ FrameworkCore::FrameworkCore(const std::string& pipe_name)
     capabilities_generator_ = std::make_unique<CapabilitiesGenerator>();
     mod_registry_ = std::make_unique<ModRegistry>();
 
+    // Create logger and setup IPC routing
+    logger_ = std::make_unique<Logger>();
+    logger_->set_mode(LogMode::FRAMEWORK_ONLY);  // Default mode
+    logger_->set_verbosity(LogLevel::INFO);      // Default verbosity
+
     // Create AP client with default UUID and game name
     ap_client_ = std::make_unique<APClientWrapper>("APFramework", "Palworld");
 
     // Create IPC server
     ipc_server_ = std::make_unique<IPCServer>(pipe_name);
+
+    // Setup logger callback to forward logs via IPC
+    logger_->set_log_callback([this](LogLevel level, const std::string& component, const std::string& message) {
+        // Create log message
+        IPCMessage log_msg;
+        log_msg.type = "log";
+        log_msg.mod_id = "APFramework";
+
+        json data;
+        data["level"] = Logger::level_to_string(level);
+        data["component"] = component;
+        data["message"] = message;
+        log_msg.data_json = data.dump();
+
+        // Send to all connected mods
+        ipc_server_->send_to_all_mods(log_msg);
+    });
 
     // Create message router (depends on IPC server)
     message_router_ = std::make_unique<MessageRouter>(ipc_server_.get());
@@ -29,6 +51,9 @@ FrameworkCore::FrameworkCore(const std::string& pipe_name)
     ipc_server_->set_message_handler([this](const IPCMessage& msg) {
         handle_ipc_message(msg);
     });
+
+    // Log initialization
+    logger_->info("FrameworkCore", "APFrameworkCore initialized with pipe: " + pipe_name);
 }
 
 FrameworkCore::~FrameworkCore() {
@@ -39,10 +64,13 @@ FrameworkCore::~FrameworkCore() {
 
 // IPC Server Management
 void FrameworkCore::start_ipc() {
+    logger_->info("IPCServer", "Starting IPC server on pipe: " + pipe_name_);
     ipc_server_->start();
+    logger_->info("IPCServer", "IPC server started successfully");
 }
 
 void FrameworkCore::stop_ipc() {
+    logger_->info("IPCServer", "Stopping IPC server");
     ipc_server_->stop();
 }
 
@@ -53,10 +81,18 @@ bool FrameworkCore::is_ipc_running() const {
 // AP Client Management
 bool FrameworkCore::connect_ap(const std::string& server, int port,
                                const std::string& slot, const std::string& password) {
-    return ap_client_->connect(server, port, slot, password);
+    logger_->info("APClient", "Connecting to AP server: " + server + ":" + std::to_string(port) + " as " + slot);
+    bool result = ap_client_->connect(server, port, slot, password);
+    if (result) {
+        logger_->info("APClient", "AP connection initiated successfully");
+    } else {
+        logger_->error("APClient", "AP connection failed");
+    }
+    return result;
 }
 
 void FrameworkCore::disconnect_ap() {
+    logger_->info("APClient", "Disconnecting from AP server");
     ap_client_->disconnect();
 }
 
@@ -70,7 +106,10 @@ bool FrameworkCore::is_ap_connected() const {
 
 // Mod Discovery and Registration
 void FrameworkCore::discover_mods(const std::string& mods_directory) {
+    logger_->info("ModRegistry", "Discovering mods in directory: " + mods_directory);
     mod_registry_->discover_mods(mods_directory);
+    auto discovered = mod_registry_->get_discovered_mods();
+    logger_->info("ModRegistry", "Discovered " + std::to_string(discovered.size()) + " enabled mods");
 }
 
 bool FrameworkCore::all_mods_registered() const {
@@ -78,11 +117,15 @@ bool FrameworkCore::all_mods_registered() const {
 }
 
 std::string FrameworkCore::generate_capabilities() const {
-    return capabilities_generator_->generate_json();
+    logger_->info("CapabilitiesGenerator", "Generating capabilities JSON");
+    std::string result = capabilities_generator_->generate_json();
+    logger_->info("CapabilitiesGenerator", "Generated " + std::to_string(result.length()) + " bytes of capabilities data");
+    return result;
 }
 
 // Polling Thread Management
 void FrameworkCore::start_polling() {
+    logger_->info("PollingThread", "Starting AP polling thread");
     polling_thread_->start();
 }
 
@@ -96,7 +139,30 @@ bool FrameworkCore::is_polling() const {
 
 // Configuration Management
 bool FrameworkCore::load_config(const std::string& config_path) {
-    return config_manager_->load_config(config_path);
+    bool result = config_manager_->load_config(config_path);
+
+    if (result) {
+        // Apply logging configuration
+        auto config = config_manager_->get_config();
+
+        // Set log mode and verbosity
+        logger_->set_mode(Logger::string_to_mode(config.log_mode));
+        logger_->set_verbosity(Logger::string_to_level(config.log_level));
+
+        // Enable/disable file logging based on config
+        if (config.log_to_file) {
+            bool file_enabled = logger_->enable_file_logging(config.log_file_path);
+            if (file_enabled) {
+                logger_->info("FrameworkCore", "File logging enabled: " + config.log_file_path);
+            } else {
+                logger_->warning("FrameworkCore", "Failed to enable file logging: " + config.log_file_path);
+            }
+        } else {
+            logger_->disable_file_logging();
+        }
+    }
+
+    return result;
 }
 
 bool FrameworkCore::save_config(const std::string& config_path) {
@@ -125,10 +191,13 @@ void FrameworkCore::handle_ipc_message(const IPCMessage& msg) {
 
 void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std::string& data_json) {
     try {
+        logger_->info("ModRegistry", "Registration request from mod: " + mod_id);
+
         // Special handling for framework mod (allow self-registration)
         if (mod_id == "archipelago.palworld.framework") {
             // Framework mod is registering as a priority client
             // Register in IPC server but skip capabilities merging
+            logger_->info("ModRegistry", "Framework mod self-registration (priority client)");
             ipc_server_->register_mod(mod_id);
 
             // Send registration_complete message back to framework mod
@@ -145,6 +214,7 @@ void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std
         ModMetadata* metadata = mod_registry_->get_mod_metadata(mod_id);
         if (!metadata) {
             // Mod not discovered during initialization
+            logger_->warning("ModRegistry", "Registration rejected: " + mod_id + " was not discovered");
             send_registration_error(mod_id, "Mod not discovered during initialization");
             return;
         }
@@ -152,6 +222,7 @@ void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std
         // Check if mod is enabled (dependency/incompatibility check)
         if (!metadata->enabled) {
             // Mod was disabled due to dependency or incompatibility issues
+            logger_->warning("ModRegistry", "Registration rejected: " + mod_id + " is disabled");
             send_registration_error(mod_id, "Mod is disabled due to dependency or incompatibility issues");
             return;
         }
@@ -215,13 +286,20 @@ void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std
         // Update message router with this mod's capabilities
         message_router_->register_mod_capabilities(mod_id, caps.items, caps.locations);
 
+        logger_->info("ModRegistry", "Successfully registered mod: " + mod_id +
+                     " (Items: " + std::to_string(caps.items.size()) +
+                     ", Locations: " + std::to_string(caps.locations.size()) +
+                     ", Regions: " + std::to_string(caps.regions.size()) + ")");
+
         // Check if all mods have registered
         if (all_mods_registered()) {
+            logger_->info("ModRegistry", "All discovered mods have registered");
             notify_registration_complete();
 
             // If autoconnect enabled, connect now
             auto profile = config_manager_->get_active_profile();
             if (profile.autoconnect) {
+                logger_->info("FrameworkCore", "Autoconnect enabled - initiating connection");
                 connect_ap(profile.server, profile.port,
                           profile.slot_name, profile.password);
             }
@@ -238,6 +316,7 @@ void FrameworkCore::handle_location_check(const std::string& mod_id, const std::
 
         if (data.contains("location_id") && data["location_id"].is_number_integer()) {
             int64_t location_id = data["location_id"];
+            logger_->info("APClient", "Location check from " + mod_id + ": location_id=" + std::to_string(location_id));
             ap_client_->check_location(location_id);
         }
 
@@ -256,6 +335,7 @@ void FrameworkCore::handle_connection_request(const std::string& mod_id, const s
         std::string password = data.value("password", "");
 
         if (!server.empty() && !slot.empty()) {
+            logger_->info("FrameworkCore", "Connection request from " + mod_id + " to " + server + ":" + std::to_string(port));
             connect_ap(server, port, slot, password);
         }
 
@@ -270,6 +350,7 @@ void FrameworkCore::handle_status_update(const std::string& mod_id, const std::s
 
         if (data.contains("status") && data["status"].is_number_integer()) {
             int status = data["status"];
+            logger_->info("APClient", "Status update from " + mod_id + ": status=" + std::to_string(status));
             ap_client_->status_update(status);
         }
 
@@ -285,13 +366,17 @@ void FrameworkCore::notify_registration_complete() {
     // TODO: Save to file (will need path configuration)
     // For now, just generate it - the Lua wrapper can request it
 
+    size_t registered_count = mod_registry_->get_all_registered_mods().size();
+    logger_->info("FrameworkCore", "Notifying " + std::to_string(registered_count) +
+                 " registered mods that registration is complete");
+
     // Send registration_complete message to all mods
     IPCMessage msg;
     msg.type = "registration_complete";
     msg.mod_id = "APFramework";
 
     json data;
-    data["registered_count"] = mod_registry_->get_all_registered_mods().size();
+    data["registered_count"] = registered_count;
     data["capabilities_ready"] = true;
     msg.data_json = data.dump();
 

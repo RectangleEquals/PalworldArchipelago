@@ -34,6 +34,9 @@ public:
         int polling_interval_ms;
         bool enable_logging;
         std::string log_level; // "debug", "info", "warn", "error"
+        std::string log_mode; // "minimal", "framework_only", "all"
+        bool log_to_file;
+        std::string log_file_path;
         std::map<std::string, std::string> mod_overrides;
     };
 
