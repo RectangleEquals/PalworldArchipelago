@@ -67,7 +67,8 @@ The IPC branch implements a decoupled architecture where:
 - **apclientpp** - Archipelago protocol client
 - **nlohmann/json** - JSON serialization
 - **Windows Named Pipes** - IPC mechanism
-- **LuaJIT FFI** - Lua-to-C++ bridge
+- **Lua 5.4** - Provided by UE4SS
+- **Lua C API** - Native Lua bindings for DLL loading (no FFI)
 
 ## Key Design Decisions
 
@@ -79,7 +80,7 @@ The IPC branch implements a decoupled architecture where:
 ### Why Split Framework (Lua + C++)?
 - C++ handles complex AP protocol and threading
 - Lua integrates with UE4SS ecosystem
-- FFI bridge keeps them connected
+- Lua C API bindings keep them connected (no FFI needed)
 
 ### Why Promise-Based Registration?
 - Framework needs to know what mods exist before generating APCapabilities.json

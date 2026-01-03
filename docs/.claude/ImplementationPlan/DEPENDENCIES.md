@@ -99,6 +99,30 @@ third_party/
 - Avoid submodule overhead for simple dependency
 - Most common approach for this library
 
+### Lua 5.4
+- **Purpose**: Lua C API for native bindings
+- **Type**: Header files + library
+- **Source**: https://www.lua.org/ftp/lua-5.4.7.tar.gz
+- **Location**: `third_party/lua-5.4.7/`
+- **License**: MIT
+- **Used in**: Phase 1 (APFrameworkCore.dll Lua bindings)
+- **Setup**:
+  - Download Lua 5.4.7 source from lua.org
+  - Build as static library or link to headers only
+  - APFrameworkCore.dll will export Lua C bindings
+
+**Required headers**:
+- `lua.h` - Core Lua C API
+- `lauxlib.h` - Auxiliary library functions
+- `lualib.h` - Standard library loader
+
+**Build options**:
+1. **Static linking**: Compile Lua into APFrameworkCore.dll
+2. **UE4SS headers**: Use Lua headers from UE4SS installation (if available)
+3. **Standalone headers**: Include just headers, rely on UE4SS's Lua runtime
+
+**Recommended: Option 1 (Static linking)** for maximum compatibility.
+
 ## Runtime Dependencies
 
 ### Windows System Libraries
@@ -115,10 +139,15 @@ Already included with Windows:
 - **Used in**: Phase 3 (Lua framework wrapper)
 - **Installation**: User-side dependency
 - **Provides**:
-  - Lua 5.4 runtime
-  - LuaJIT FFI (for loading DLLs)
+  - **Lua 5.4 runtime** (NOT LuaJIT - no FFI available)
+  - Native C module loading via Lua C API
   - Hook system
   - UE4 API access
+
+**Important**: UE4SS uses standard Lua 5.4, not LuaJIT. This means:
+- No FFI (`ffi.cdef`, `ffi.load`) available
+- Must use Lua C API for native bindings
+- DLLs must export `luaopen_<modulename>()` function
 
 ## Build Tools
 

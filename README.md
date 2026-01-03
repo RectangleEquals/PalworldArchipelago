@@ -21,7 +21,6 @@ This branch contains a **complete architectural redesign** of the Palworld Archi
 ## Documentation
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Complete architecture design
-- **[PROJECT_STATE.md](docs/PROJECT_STATE.md)** - Current status and roadmap
 - **[IMPLEMENTATION_PLAN.md](docs/.claude/IMPLEMENTATION_PLAN.md)** - Detailed technical specs
 
 ---
@@ -76,7 +75,6 @@ ue4ss/mods/
 If you're interested in contributing or testing, check out:
 - [Architecture Design](docs/ARCHITECTURE.md) - Understand the system
 - [Implementation Plan](docs/.claude/IMPLEMENTATION_PLAN.md) - See what's being built
-- [Project State](docs/PROJECT_STATE.md) - Track progress
 
 ---
 

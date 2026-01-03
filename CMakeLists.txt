@@ -21,6 +21,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(APCLIENTPP_BUILD_TESTING OFF CACHE BOOL "Disable apclientpp tests" FORCE)
 add_subdirectory(third_party/apclientpp)
 
+# Add Lua 5.4 static library
+add_subdirectory(third_party/lua-5.4.7)
+
 # Add subdirectories
 add_subdirectory(src/framework_core)
 add_subdirectory(src/client_lib)

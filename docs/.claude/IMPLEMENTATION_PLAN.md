@@ -25,14 +25,23 @@ This makes it easier to navigate and update specific phases without dealing with
 
 ## Current Status
 
-**Active Phase**: Phase 2 ✅ **COMPLETE**
+**Active Phase**: Phase 2 ✅ **COMPLETE** | Phase 3 🔄 **REDESIGN**
+
 **Build Outputs**:
-- APFrameworkCore.dll (1023 KB)
-- APClientLib.dll (10 KB)
-- ap_client.lua (pure Lua)
-**Next Phase**: Phase 3 - Lua Framework Wrapper (NEXT)
+- APFrameworkCore.dll (1023 KB) - ✅ Complete
+- APClientLib.dll (10 KB) - ✅ Complete
+- ap_client.lua (pure Lua) - ✅ Complete
+
+**Phase 3 Update**:
+- ⚠️ **Discovery**: UE4SS uses Lua 5.4 (not LuaJIT), FFI not available
+- 🔄 **Redesign**: Switching to native Lua C API bindings
+- 📋 **Approach**: Add Lua C bindings to APFrameworkCore.dll
+- 📄 **Plan**: See [Temp/LUA_BINDINGS_REDESIGN.md](Temp/LUA_BINDINGS_REDESIGN.md)
+
+**Next Phase**: Phase 3a - Implement Lua C Bindings (NEXT)
 
 See [Phase 2 Documentation](ImplementationPlan/PHASE_2.md) for API reference and usage examples.
+See [Phase 3 Documentation](ImplementationPlan/PHASE_3.md) for updated Lua bindings approach.
 
 ## Navigation
 

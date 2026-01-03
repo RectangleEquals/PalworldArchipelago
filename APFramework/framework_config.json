@@ -1,7 +1,8 @@
 {
   "server": "archipelago.gg",
   "port": 38281,
-  "slot_name": "P1",
+  "slot_name": "Player1",
   "password": "",
-  "autoconnect": false
+  "autoconnect": false,
+  "registration_timeout": 180
 }

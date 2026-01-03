@@ -30,8 +30,9 @@ set(SOURCES
     src/polling_thread.cpp
     src/config_manager.cpp
     src/capabilities_generator.cpp
+    src/logger.cpp
     src/framework_core.cpp
-    src/ffi_bindings.cpp
+    src/lua_bindings.cpp
     src/main.cpp
 )
 
@@ -45,8 +46,9 @@ set(HEADERS
     include/polling_thread.h
     include/config_manager.h
     include/capabilities_generator.h
+    include/logger.h
     include/framework_core.h
-    include/ffi_bindings.h
+    include/lua_bindings.h
 )
 
 # Build DLL
@@ -63,6 +65,7 @@ target_include_directories(APFrameworkCore
         ${CMAKE_SOURCE_DIR}/third_party/asio/asio/include
         ${CMAKE_SOURCE_DIR}/third_party/websocketpp
         ${CMAKE_SOURCE_DIR}/third_party/valijson/include
+        ${CMAKE_SOURCE_DIR}/third_party/lua-5.4.7/src  # Lua 5.4 headers
 )
 
 # Link libraries
@@ -70,6 +73,7 @@ target_link_libraries(APFrameworkCore
     PRIVATE apclientpp  # Header-only interface library
     PRIVATE ws2_32      # Windows sockets
     PRIVATE crypt32     # Windows crypto (for SSL)
+    PRIVATE lua         # Lua 5.4 static library
 )
 
 # Set output directory

@@ -5,7 +5,7 @@
 Phase 3 implements the main **APFramework UE4SS mod** - a Lua mod that wraps APFrameworkCore.dll and manages the framework lifecycle.
 
 This is the **only required mod** for the system to work. It:
-- Loads APFrameworkCore.dll via LuaJIT FFI
+- Loads APFrameworkCore.dll via native Lua C bindings (UE4SS uses Lua 5.4, not LuaJIT)
 - Starts the IPC server
 - Performs mod auto-discovery
 - Connects to the Archipelago server
@@ -25,10 +25,12 @@ This is the **only required mod** for the system to work. It:
 APFramework/ (UE4SS Mod)
 ├── Scripts/
 │   ├── main.lua              (Entry point, registers hooks)
-│   ├── framework_wrapper.lua (FFI wrapper for APFrameworkCore.dll)
+│   ├── framework_wrapper.lua (Lua wrapper for APFrameworkCore.dll)
+│   ├── config.lua            (Configuration management)
 │   ├── config_ui.lua         (Configuration UI - optional)
 │   └── utils.lua             (Helpers)
-├── APFrameworkCore.dll       (Copied from Phase 1 build)
+├── APFrameworkCore.dll       (C++ core with Lua C bindings, from Phase 1)
+├── framework_config.json     (Configuration file)
 └── enabled.txt               (UE4SS mod enablement)
 ```
 
@@ -74,118 +76,108 @@ RegisterHook("/Script/Engine.PlayerController:PlayerTick", function()
 end)
 ```
 
-### 2. framework_wrapper.lua - FFI Wrapper
+### 2. framework_wrapper.lua - Native Lua Wrapper
+
+**Note**: APFrameworkCore.dll exports Lua C bindings via `luaopen_APFrameworkCore()`. UE4SS's Lua 5.4 runtime loads it as a native module.
 
 ```lua
-local ffi = require("ffi")
+-- Load native module (APFrameworkCore.dll provides luaopen_APFrameworkCore)
+-- UE4SS searches package.cpath for .dll files
+local core = require("APFrameworkCore")
 
--- Load FFI definitions from ffi_bindings.h
-ffi.cdef[[
-    // Opaque handle
-    typedef void* FrameworkHandle;
-
-    // Lifecycle
-    FrameworkHandle framework_core_create(const char* pipe_name);
-    void framework_core_destroy(FrameworkHandle handle);
-
-    // IPC
-    void framework_core_start_ipc(FrameworkHandle handle);
-    void framework_core_stop_ipc(FrameworkHandle handle);
-
-    // Mod discovery
-    void framework_core_discover_mods(FrameworkHandle handle, const char* mods_directory);
-    bool framework_core_all_mods_registered(FrameworkHandle handle);
-    char* framework_core_get_pending_registrations(FrameworkHandle handle);
-
-    // Capabilities
-    char* framework_core_generate_capabilities(FrameworkHandle handle);
-
-    // AP Connection
-    bool framework_core_connect_ap(FrameworkHandle handle,
-                                    const char* server, int port,
-                                    const char* slot_name, const char* password);
-    void framework_core_disconnect_ap(FrameworkHandle handle);
-    bool framework_core_is_connected(FrameworkHandle handle);
-
-    // Polling
-    void framework_core_start_polling(FrameworkHandle handle);
-    void framework_core_stop_polling(FrameworkHandle handle);
-
-    // Configuration
-    bool framework_core_load_config(FrameworkHandle handle, const char* config_path);
-    bool framework_core_save_config(FrameworkHandle handle, const char* config_path);
-    char* framework_core_get_active_profile_json(FrameworkHandle handle);
-    bool framework_core_set_active_profile(FrameworkHandle handle, const char* profile_json);
-
-    // Utility
-    void framework_core_free_string(char* str);
-]]
-
--- Load DLL
-local dll_path = "APFramework/APFrameworkCore.dll"
-local core = ffi.load(dll_path)
-
--- Wrapper class
+-- Wrapper class for convenience
 local FrameworkWrapper = {}
+FrameworkWrapper.__index = FrameworkWrapper
 
 function FrameworkWrapper:new(pipe_name)
     local obj = {
-        handle = core.framework_core_create(pipe_name),
+        handle = core.create(pipe_name),
         pipe_name = pipe_name
     }
     setmetatable(obj, self)
-    self.__index = self
     return obj
 end
 
 function FrameworkWrapper:shutdown()
     if self.handle then
-        core.framework_core_stop_polling(self.handle)
-        core.framework_core_disconnect_ap(self.handle)
-        core.framework_core_stop_ipc(self.handle)
-        core.framework_core_destroy(self.handle)
+        self.handle:stop_polling()
+        self.handle:disconnect_ap()
+        self.handle:stop_ipc()
+        -- handle will be garbage collected (has __gc metamethod)
         self.handle = nil
     end
 end
 
 function FrameworkWrapper:load_config(config_path)
-    return core.framework_core_load_config(self.handle, config_path)
+    return self.handle:load_config(config_path)
 end
 
 function FrameworkWrapper:save_config(config_path)
-    return core.framework_core_save_config(self.handle, config_path)
+    return self.handle:save_config(config_path)
 end
 
 function FrameworkWrapper:start_ipc()
-    core.framework_core_start_ipc(self.handle)
+    self.handle:start_ipc()
+end
+
+function FrameworkWrapper:stop_ipc()
+    self.handle:stop_ipc()
 end
 
 function FrameworkWrapper:discover_mods(mods_directory)
-    core.framework_core_discover_mods(self.handle, mods_directory)
+    self.handle:discover_mods(mods_directory)
 end
 
 function FrameworkWrapper:all_mods_registered()
-    return core.framework_core_all_mods_registered(self.handle)
+    return self.handle:all_mods_registered()
+end
+
+function FrameworkWrapper:get_pending_registrations()
+    return self.handle:get_pending_registrations()
+end
+
+function FrameworkWrapper:generate_capabilities()
+    return self.handle:generate_capabilities()
 end
 
 function FrameworkWrapper:connect_ap(server, port, slot_name, password)
-    return core.framework_core_connect_ap(self.handle, server, port, slot_name, password)
+    return self.handle:connect_ap(server, port, slot_name, password or "")
+end
+
+function FrameworkWrapper:disconnect_ap()
+    self.handle:disconnect_ap()
 end
 
 function FrameworkWrapper:is_connected()
-    return core.framework_core_is_connected(self.handle)
+    return self.handle:is_connected()
 end
 
--- Helper: Get string from C and free it
-function FrameworkWrapper:get_and_free_string(c_str)
-    if c_str == nil then return nil end
-    local str = ffi.string(c_str)
-    core.framework_core_free_string(c_str)
-    return str
+function FrameworkWrapper:start_polling()
+    self.handle:start_polling()
+end
+
+function FrameworkWrapper:stop_polling()
+    self.handle:stop_polling()
+end
+
+function FrameworkWrapper:get_active_profile()
+    return self.handle:get_active_profile()
+end
+
+function FrameworkWrapper:set_active_profile(profile_json)
+    return self.handle:set_active_profile(profile_json)
 end
 
 return FrameworkWrapper
 ```
+
+**How it works:**
+1. APFrameworkCore.dll exports `luaopen_APFrameworkCore(lua_State*)`
+2. UE4SS's Lua `require("APFrameworkCore")` calls this function
+3. The C binding layer creates a module table with `create()` function
+4. `core.create(pipe_name)` returns a Lua userdata with metatable
+5. All methods are accessible via userdata:method() syntax
+6. Garbage collection automatically cleans up via `__gc` metamethod
 
 ### 3. config_ui.lua - Configuration UI (Optional)
 
@@ -238,7 +230,7 @@ return ConfigUI
 ```
 Game Start
     ↓
-1. Load APFrameworkCore.dll via FFI
+1. Load APFrameworkCore.dll via native Lua bindings
     ↓
 2. Create FrameworkCore instance
     ↓
@@ -415,9 +407,9 @@ Palworld/Pal/Binaries/Win64/
 
 ## Dependencies
 
-- **UE4SS**: Provides Lua runtime and mod system
-- **LuaJIT FFI**: For loading APFrameworkCore.dll
-- **APFrameworkCore.dll**: Built in Phase 1
+- **UE4SS**: Provides Lua 5.4 runtime and mod system
+- **Lua 5.4**: Native C module loading (no FFI needed)
+- **APFrameworkCore.dll**: Built in Phase 1 (with Lua C bindings)
 - **ImGui** (optional): For configuration UI
 
 ## Testing

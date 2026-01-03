@@ -34,11 +34,12 @@ See [PHASE_2.md](PHASE_2.md) for API documentation and usage examples.
 - Example mods for both languages
 - Full API documentation
 
-### 🎮 Phase 3: Lua Framework Wrapper - NEXT
+### 🎮 Phase 3: Lua Framework Wrapper - REDESIGN
 - Main APFramework UE4SS mod
-- Loads APFrameworkCore.dll via FFI
+- Loads APFrameworkCore.dll via native Lua C bindings
 - Manages framework lifecycle
 - Auto-discovery of mods
+- **Update**: FFI not available in UE4SS (uses Lua 5.4, not LuaJIT)
 
 ### ✨ Phase 4: Example Mods & Testing
 - Example Lua, C++, and BP Logic mods

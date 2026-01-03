@@ -10,7 +10,8 @@ function Config:new()
         port = 38281,
         slot_name = "P1",
         password = "",
-        autoconnect = false
+        autoconnect = false,
+        registration_timeout = 180  -- 3 minutes by default
     }
     setmetatable(obj, self)
     return obj
@@ -33,6 +34,7 @@ function Config:load(config_path)
     self.slot_name = content:match('"slot_name"%s*:%s*"([^"]*)"') or self.slot_name
     self.password = content:match('"password"%s*:%s*"([^"]*)"') or self.password
     self.autoconnect = content:match('"autoconnect"%s*:%s*(true)') ~= nil
+    self.registration_timeout = tonumber(content:match('"registration_timeout"%s*:%s*(%d+)')) or self.registration_timeout
 
     return true
 end

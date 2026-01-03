@@ -12,8 +12,8 @@ Phase 1 implements the core C++ library that handles:
 ## Build Output
 
 - **APFrameworkCore.dll** - Main framework library
-- Exports C API via FFI bindings for Lua integration
-- Dependencies: apclientpp, nlohmann/json, asio, websocketpp, wswrap
+- Exports C API via Lua C bindings for Lua integration
+- Dependencies: apclientpp, nlohmann/json, asio, websocketpp, wswrap, lua5.4
 
 ## Component Architecture
 
@@ -193,11 +193,12 @@ struct RegionDefinition {
 **Status**: Header-only template - **COMPLETE**, no .cpp file needed
 
 #### [ffi_bindings.h](../../../src/framework_core/include/ffi_bindings.h)
-**Purpose**: C API for Lua FFI integration
+**Purpose**: C API for Lua C bindings integration
 **Key Features**:
 - Opaque `FrameworkHandle` pattern
 - All framework operations exposed as C functions
 - Memory management helpers (e.g., `framework_core_free_string()`)
+**Note**: Name retained for compatibility, but used for Lua C API bindings (not FFI)
 
 ## Source Files Status
 
