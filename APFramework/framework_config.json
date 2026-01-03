@@ -4,5 +4,7 @@
   "slot_name": "Player1",
   "password": "",
   "autoconnect": false,
-  "registration_timeout": 180
+  "registration_timeout": 180,
+  "log_mode": "framework_only",
+  "log_verbosity": "info"
 }

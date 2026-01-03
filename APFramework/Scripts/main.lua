@@ -5,13 +5,18 @@ print("[APFramework] Loading APFramework v2.0.0 (IPC Architecture)...")
 
 local FrameworkWrapper = require("framework_wrapper")
 local Config = require("config")
+local APClient = require("ap_client")
 
 -- Configuration
 local PIPE_NAME = "APFramework_default"
 local MODS_DIRECTORY = "ue4ss\\Mods"
 local CONFIG_PATH = "ue4ss\\Mods\\APFramework\\framework_config.json"
 local LOG_PATH = "ue4ss\\Mods\\APFramework\\framework.log"
-local CAPABILITIES_PATH = "ue4ss\\Mods\\APFramework\\APCapabilities.json"
+local CAPABILITIES_BASE_DIR = "ue4ss\\Mods\\APFramework"
+local FRAMEWORK_MOD_ID = "archipelago.palworld.framework"
+
+-- Dynamic capabilities path (set after config loads)
+local CAPABILITIES_PATH = nil
 
 -- Initialize logger FIRST (before creating framework)
 FrameworkWrapper.init_logger(LOG_PATH)
@@ -20,9 +25,11 @@ print("[APFramework] Logger initialized at: " .. LOG_PATH)
 -- Global state
 local framework = nil
 local config = nil
+local framework_client = nil  -- Priority client instance
 local state = {
     initialized = false,
     ipc_started = false,
+    framework_registered = false,  -- NEW: Framework mod registration status
     mods_discovered = false,
     all_registered = false,
     connected = false,
@@ -30,6 +37,19 @@ local state = {
 }
 
 local registration_start_time = 0
+
+-- Function to build dynamic capabilities filename
+local function build_capabilities_filename(slot_name)
+    if not slot_name or slot_name == "" then
+        print("[APFramework] WARNING: No slot_name configured, using default 'Player1'")
+        slot_name = "Player1"
+    end
+
+    local filename = "APCapabilities_" .. slot_name .. ".json"
+    local full_path = CAPABILITIES_BASE_DIR .. "\\" .. filename
+
+    return full_path, filename
+end
 
 -- Initialize framework
 local function initialize_framework()
@@ -49,6 +69,11 @@ local function initialize_framework()
     else
         print("[APFramework] Using default configuration")
     end
+
+    -- Build dynamic capabilities filename
+    local filename_only
+    CAPABILITIES_PATH, filename_only = build_capabilities_filename(config.slot_name)
+    print("[APFramework] Capabilities filename: " .. filename_only)
 
     -- Create framework
     print("[APFramework] Creating FrameworkCore with pipe: " .. PIPE_NAME)
@@ -70,6 +95,61 @@ local function start_ipc()
     framework:start_ipc()
     state.ipc_started = true
     print("[APFramework] IPC server started - waiting for mod connections")
+end
+
+-- Register framework mod as priority client
+local function register_framework_client()
+    if state.framework_registered then return end
+
+    print("[APFramework] Registering framework mod as priority client...")
+    print("[APFramework] Mod ID: " .. FRAMEWORK_MOD_ID)
+
+    -- Create client instance
+    framework_client = APClient:new(FRAMEWORK_MOD_ID, PIPE_NAME)
+
+    if not framework_client or not framework_client.connected then
+        print("[APFramework] WARNING: Failed to connect framework client to IPC server")
+        print("[APFramework] Will retry later...")
+        return
+    end
+
+    -- Setup callbacks for framework client
+    framework_client.on_registration_complete = function()
+        print("[APFramework] Framework mod registered as priority client!")
+        state.framework_registered = true
+    end
+
+    framework_client.on_item_received = function(item_id, location_id, player_slot)
+        print("[APFramework] [PRIORITY CLIENT] Item received: " .. item_id)
+    end
+
+    framework_client.on_location_checked = function(location_id)
+        print("[APFramework] [PRIORITY CLIENT] Location checked: " .. location_id)
+    end
+
+    framework_client.on_connection_status = function(connected, slot_name)
+        print("[APFramework] [PRIORITY CLIENT] Connection status: " .. tostring(connected))
+    end
+
+    -- Register with empty capabilities (framework mod provides no items/locations)
+    local success = framework_client:register({
+        items = {},
+        locations = {},
+        regions = {}
+    })
+
+    if success then
+        print("[APFramework] Framework client registration message sent")
+    else
+        print("[APFramework] ERROR: Failed to send framework client registration")
+    end
+end
+
+-- Poll framework client for messages
+local function poll_framework_client()
+    if framework_client and framework_client.connected then
+        framework_client:poll()
+    end
 end
 
 -- Discover mods
@@ -188,11 +268,18 @@ local function update_lifecycle()
     elseif lifecycle == "START_IPC" then
         start_ipc()
         if state.ipc_started then
+            -- Register framework mod as priority client (after slight delay for server to be ready)
+            register_framework_client()
             lifecycle = "DISCOVER"
             print("[APFramework] Lifecycle: START_IPC -> DISCOVER")
         end
 
     elseif lifecycle == "DISCOVER" then
+        -- Retry framework client registration if it failed
+        if not state.framework_registered then
+            register_framework_client()
+        end
+
         discover_mods()
         if state.mods_discovered then
             lifecycle = "WAIT_REG"
@@ -228,6 +315,9 @@ RegisterCustomEvent("Tick", function(deltaTime)
             update_lifecycle()
         end
     end
+
+    -- Poll framework client for messages (runs always, even in RUNNING state)
+    poll_framework_client()
 end)
 
 -- Shutdown hook

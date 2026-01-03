@@ -125,6 +125,38 @@ void FrameworkCore::handle_ipc_message(const IPCMessage& msg) {
 
 void FrameworkCore::handle_mod_registration(const std::string& mod_id, const std::string& data_json) {
     try {
+        // Special handling for framework mod (allow self-registration)
+        if (mod_id == "archipelago.palworld.framework") {
+            // Framework mod is registering as a priority client
+            // Register in IPC server but skip capabilities merging
+            ipc_server_->register_mod(mod_id);
+
+            // Send registration_complete message back to framework mod
+            IPCMessage response;
+            response.type = "registration_complete";
+            response.mod_id = mod_id;
+            response.data_json = "{}";
+            ipc_server_->send_to_mod(mod_id, response);
+
+            return;
+        }
+
+        // Check if mod is discovered
+        ModMetadata* metadata = mod_registry_->get_mod_metadata(mod_id);
+        if (!metadata) {
+            // Mod not discovered during initialization
+            send_registration_error(mod_id, "Mod not discovered during initialization");
+            return;
+        }
+
+        // Check if mod is enabled (dependency/incompatibility check)
+        if (!metadata->enabled) {
+            // Mod was disabled due to dependency or incompatibility issues
+            send_registration_error(mod_id, "Mod is disabled due to dependency or incompatibility issues");
+            return;
+        }
+
+        // Normal mod registration
         // Register mod in capabilities generator (which parses the full JSON)
         capabilities_generator_->register_mod_from_config(mod_id, data_json);
 
@@ -264,6 +296,18 @@ void FrameworkCore::notify_registration_complete() {
     msg.data_json = data.dump();
 
     ipc_server_->send_to_all_mods(msg);
+}
+
+void FrameworkCore::send_registration_error(const std::string& mod_id, const std::string& reason) {
+    IPCMessage error_msg;
+    error_msg.type = "registration_error";
+    error_msg.mod_id = mod_id;
+
+    json data;
+    data["error"] = reason;
+    error_msg.data_json = data.dump();
+
+    ipc_server_->send_to_mod(mod_id, error_msg);
 }
 
 } // namespace APFramework

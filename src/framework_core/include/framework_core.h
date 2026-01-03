@@ -90,6 +90,9 @@ private:
 
     // Notify all mods that registration is complete
     void notify_registration_complete();
+
+    // Send registration error to a mod
+    void send_registration_error(const std::string& mod_id, const std::string& reason);
 };
 
 } // namespace APFramework
