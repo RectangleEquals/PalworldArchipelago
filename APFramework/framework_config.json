@@ -1,12 +1,12 @@
 {
-  "server": "archipelago.gg",
+  "server": "localhost",
   "port": 38281,
   "slot_name": "Player1",
   "password": "",
   "autoconnect": false,
   "registration_timeout": 180,
-  "log_mode": "framework_only",
-  "log_verbosity": "info",
+  "log_mode": "all",
+  "log_verbosity": "debug",
   "log_to_file": true,
-  "log_file_path": "apframework.log"
+  "log_file_path": "E:\\SteamLibrary\\steamapps\\common\\Palworld\\Pal\\Binaries\\Win64\\ue4ss\\Mods\\APFramework\\apframework.log"
 }

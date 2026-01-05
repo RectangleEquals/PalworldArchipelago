@@ -237,17 +237,20 @@ std::string IPCServer::read_message(HANDLE pipe_handle) {
 }
 
 bool IPCServer::write_message(HANDLE pipe_handle, const std::string& message) {
+    // Add newline delimiter to match client's expectation
+    std::string message_with_newline = message + "\n";
+
     DWORD bytes_written = 0;
 
     BOOL success = WriteFile(
         pipe_handle,
-        message.c_str(),
-        static_cast<DWORD>(message.size()),
+        message_with_newline.c_str(),
+        static_cast<DWORD>(message_with_newline.size()),
         &bytes_written,
         NULL
     );
 
-    return success && bytes_written == message.size();
+    return success && bytes_written == message_with_newline.size();
 }
 
 } // namespace APFramework

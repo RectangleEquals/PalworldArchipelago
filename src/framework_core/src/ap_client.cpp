@@ -1,4 +1,5 @@
 #include "ap_client.h"
+#include "debug_log.h"
 #include <apclient.hpp>
 #include <nlohmann/json.hpp>
 
@@ -14,13 +15,20 @@ struct APClientImpl {
     std::string game;
     std::string current_uri;
 
+    // Pending slot connection parameters (to be used when room_info callback fires)
+    std::string pending_slot_name;
+    std::string pending_password;
+    int pending_items_handling = 0;
+    bool has_pending_slot_connection = false;
+
     APClientImpl(const std::string& uuid_, const std::string& game_)
-        : uuid(uuid_), game(game_), current_uri("localhost:38281") {
+        : uuid(uuid_), game(game_), current_uri("ws://localhost:38281") {
         client = std::make_unique<::APClient>(uuid, game, current_uri);
     }
 
     void reconnect(const std::string& server, int port) {
-        std::string new_uri = server + ":" + std::to_string(port);
+        // Build WebSocket URI with ws:// protocol (non-SSL)
+        std::string new_uri = "ws://" + server + ":" + std::to_string(port);
         if (new_uri != current_uri) {
             // Need to recreate the client with new URI
             current_uri = new_uri;
@@ -32,17 +40,55 @@ struct APClientImpl {
 APClientWrapper::APClientWrapper(const std::string& uuid, const std::string& game) {
     impl_ = std::make_unique<APClientImpl>(uuid, game);
 
-    // Register callbacks
+    // Register socket-level callbacks
+    impl_->client->set_socket_connected_handler([this]() {
+        DEBUG_LOG("APClientWrapper callback: socket_connected");
+    });
+
+    impl_->client->set_socket_error_handler([this](const std::string& error) {
+        DEBUG_LOG("APClientWrapper callback: socket_error - " + error);
+    });
+
+    impl_->client->set_socket_disconnected_handler([this]() {
+        DEBUG_LOG("APClientWrapper callback: socket_disconnected");
+    });
+
+    impl_->client->set_room_info_handler([this]() {
+        DEBUG_LOG("APClientWrapper callback: room_info");
+
+        // If we have a pending slot connection, send it now
+        if (impl_->has_pending_slot_connection) {
+            DEBUG_LOG("APClientWrapper room_info: Sending pending ConnectSlot request");
+            DEBUG_LOG("APClientWrapper room_info: slot_name='" + impl_->pending_slot_name +
+                     "' password='" + impl_->pending_password +
+                     "' items_handling=" + std::to_string(impl_->pending_items_handling));
+
+            impl_->client->ConnectSlot(impl_->pending_slot_name, impl_->pending_password,
+                                      impl_->pending_items_handling);
+            impl_->has_pending_slot_connection = false;
+            DEBUG_LOG("APClientWrapper room_info: ConnectSlot() called");
+        }
+    });
+
+    // Register slot-level callbacks
     impl_->client->set_slot_connected_handler([this](const json& data) {
+        DEBUG_LOG("APClientWrapper callback: slot_connected");
         on_slot_connected(data.dump());
     });
 
     impl_->client->set_slot_refused_handler([this](const std::list<std::string>& reasons) {
+        DEBUG_LOG("APClientWrapper callback: slot_refused");
         json reason_json = reasons;
         on_slot_refused(reason_json.dump());
     });
 
+    impl_->client->set_slot_disconnected_handler([this]() {
+        DEBUG_LOG("APClientWrapper callback: slot_disconnected");
+    });
+
+    // Register game event callbacks
     impl_->client->set_items_received_handler([this](const std::list<APClient::NetworkItem>& items) {
+        DEBUG_LOG("APClientWrapper callback: items_received count=" + std::to_string(items.size()));
         json items_json;
         for (const auto& item : items) {
             json item_obj;
@@ -56,6 +102,7 @@ APClientWrapper::APClientWrapper(const std::string& uuid, const std::string& gam
     });
 
     impl_->client->set_location_checked_handler([this](const std::list<int64_t>& locations) {
+        DEBUG_LOG("APClientWrapper callback: location_checked count=" + std::to_string(locations.size()));
         json locations_json = locations;
         on_location_checked(locations_json.dump());
     });
@@ -67,15 +114,26 @@ APClientWrapper::~APClientWrapper() {
 
 bool APClientWrapper::connect(const std::string& server, int port,
                               const std::string& slot_name, const std::string& password) {
+    DEBUG_LOG("APClientWrapper::connect() ENTER: server=" + server + " port=" + std::to_string(port) + " slot=" + slot_name);
     try {
         // Reconnect with new server if needed
+        DEBUG_LOG("APClientWrapper::connect() calling impl_->reconnect()");
         impl_->reconnect(server, port);
+        DEBUG_LOG("APClientWrapper::connect() reconnect complete");
 
-        // Connect to the slot
-        // items_handling: 0 = no item link, 1 = send, 2 = receive, 7 = all
-        impl_->client->ConnectSlot(slot_name, password, 7);  // 7 = full item link
+        // Store connection parameters - ConnectSlot will be called from room_info callback
+        impl_->pending_slot_name = slot_name;
+        impl_->pending_password = password;
+        impl_->pending_items_handling = 7;  // 7 = full item link (send + receive)
+        impl_->has_pending_slot_connection = true;
+
+        DEBUG_LOG("APClientWrapper::connect() slot connection parameters stored");
+        DEBUG_LOG("APClientWrapper::connect() will send ConnectSlot when room_info is received");
+        DEBUG_LOG("APClientWrapper::connect() parameters: slot_name='" + slot_name + "' password='" + password + "' items_handling=7");
+
         return true;
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        DEBUG_LOG("APClientWrapper::connect() EXCEPTION: " + std::string(e.what()));
         return false;
     }
 }
@@ -107,6 +165,14 @@ int APClientWrapper::get_state() const {
 void APClientWrapper::poll() {
     if (impl_) {
         impl_->client->poll();
+
+        // Log state periodically for debugging
+        static int poll_count = 0;
+        poll_count++;
+        if (poll_count % 300 == 0) {  // Every ~5 seconds at 60fps
+            APClient::State state = impl_->client->get_state();
+            DEBUG_LOG("APClientWrapper::poll() state=" + std::to_string(static_cast<int>(state)));
+        }
     }
 }
 
@@ -145,61 +211,40 @@ void APClientWrapper::on_slot_connected(const std::string& data) {
     msg.data_json = data;
 
     pending_messages_.push_back(msg);
+    DEBUG_LOG("APClientWrapper::on_slot_connected() message queued");
 }
 
 void APClientWrapper::on_slot_refused(const std::string& reason) {
-    std::lock_guard<std::mutex> lock(messages_mutex_);
-
-    APMessage msg;
-    msg.type = APMessage::Type::Disconnected;
-    msg.item_id = 0;
-    msg.location_id = 0;
-    msg.player_slot = 0;
-    msg.data_json = reason;
-
-    pending_messages_.push_back(msg);
+    DEBUG_LOG("APClientWrapper::on_slot_refused() reason=" + reason);
+    // Could add to message queue if needed
 }
 
 void APClientWrapper::on_items_received(const std::string& data) {
     std::lock_guard<std::mutex> lock(messages_mutex_);
 
-    try {
-        json items = json::parse(data);
+    APMessage msg;
+    msg.type = APMessage::Type::ItemReceived;
+    msg.item_id = 0;
+    msg.location_id = 0;
+    msg.player_slot = 0;
+    msg.data_json = data;
 
-        for (const auto& item : items) {
-            APMessage msg;
-            msg.type = APMessage::Type::ItemReceived;
-            msg.item_id = item.value("item", 0);
-            msg.location_id = item.value("location", 0);
-            msg.player_slot = item.value("player", 0);
-            msg.data_json = item.dump();
-
-            pending_messages_.push_back(msg);
-        }
-    } catch (const std::exception&) {
-        // Invalid JSON - skip
-    }
+    pending_messages_.push_back(msg);
+    DEBUG_LOG("APClientWrapper::on_items_received() message queued");
 }
 
 void APClientWrapper::on_location_checked(const std::string& data) {
     std::lock_guard<std::mutex> lock(messages_mutex_);
 
-    try {
-        json locations = json::parse(data);
+    APMessage msg;
+    msg.type = APMessage::Type::LocationChecked;
+    msg.item_id = 0;
+    msg.location_id = 0;
+    msg.player_slot = 0;
+    msg.data_json = data;
 
-        for (const auto& location : locations) {
-            APMessage msg;
-            msg.type = APMessage::Type::LocationChecked;
-            msg.item_id = 0;
-            msg.location_id = location.get<int64_t>();
-            msg.player_slot = 0;
-            msg.data_json = data;
-
-            pending_messages_.push_back(msg);
-        }
-    } catch (const std::exception&) {
-        // Invalid JSON - skip
-    }
+    pending_messages_.push_back(msg);
+    DEBUG_LOG("APClientWrapper::on_location_checked() message queued");
 }
 
 } // namespace APFramework

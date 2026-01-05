@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(SOURCES
     src/ap_client_lib.cpp
     src/ipc_client.cpp
+    src/client_lib_bindings.cpp
 )
 
 set(HEADERS
@@ -25,11 +26,14 @@ target_include_directories(APClientLib
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src/framework_core/include
+        ${CMAKE_SOURCE_DIR}/third_party/lua-5.4.7/src
 )
 
 # Link libraries
 target_link_libraries(APClientLib
-    PRIVATE ws2_32  # Windows sockets for Named Pipes
+    PRIVATE
+        ws2_32  # Windows sockets for Named Pipes
+        lua  # Lua library for bindings
 )
 
 # Windows-specific definitions

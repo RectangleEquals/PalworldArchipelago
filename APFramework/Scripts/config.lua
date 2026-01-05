@@ -1,7 +1,7 @@
 -- Configuration Management for APFramework
 -- Uses lunajson for robust JSON parsing
 
-local json = require("lib.lunajson")
+local json = require("lunajson")
 
 local Config = {}
 Config.__index = Config

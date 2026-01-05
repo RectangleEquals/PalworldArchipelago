@@ -1,4 +1,5 @@
 #include "framework_core.h"
+#include "debug_log.h"
 #include <nlohmann/json.hpp>
 
 namespace APFramework {
@@ -64,9 +65,13 @@ FrameworkCore::~FrameworkCore() {
 
 // IPC Server Management
 void FrameworkCore::start_ipc() {
+    DEBUG_LOG("start_ipc() ENTER");
     logger_->info("IPCServer", "Starting IPC server on pipe: " + pipe_name_);
+    DEBUG_LOG("start_ipc() calling ipc_server_->start()");
     ipc_server_->start();
+    DEBUG_LOG("start_ipc() ipc_server_->start() returned");
     logger_->info("IPCServer", "IPC server started successfully");
+    DEBUG_LOG("start_ipc() EXIT");
 }
 
 void FrameworkCore::stop_ipc() {
@@ -81,13 +86,17 @@ bool FrameworkCore::is_ipc_running() const {
 // AP Client Management
 bool FrameworkCore::connect_ap(const std::string& server, int port,
                                const std::string& slot, const std::string& password) {
+    DEBUG_LOG("connect_ap() ENTER: server=" + server + " port=" + std::to_string(port) + " slot=" + slot);
     logger_->info("APClient", "Connecting to AP server: " + server + ":" + std::to_string(port) + " as " + slot);
+    DEBUG_LOG("connect_ap() calling ap_client_->connect()");
     bool result = ap_client_->connect(server, port, slot, password);
+    DEBUG_LOG("connect_ap() ap_client_->connect() returned: " + std::string(result ? "true" : "false"));
     if (result) {
         logger_->info("APClient", "AP connection initiated successfully");
     } else {
         logger_->error("APClient", "AP connection failed");
     }
+    DEBUG_LOG("connect_ap() EXIT");
     return result;
 }
 
@@ -106,10 +115,15 @@ bool FrameworkCore::is_ap_connected() const {
 
 // Mod Discovery and Registration
 void FrameworkCore::discover_mods(const std::string& mods_directory) {
+    DEBUG_LOG("discover_mods() ENTER: " + mods_directory);
     logger_->info("ModRegistry", "Discovering mods in directory: " + mods_directory);
+    DEBUG_LOG("discover_mods() calling mod_registry_->discover_mods()");
     mod_registry_->discover_mods(mods_directory);
+    DEBUG_LOG("discover_mods() mod_registry_->discover_mods() returned");
     auto discovered = mod_registry_->get_discovered_mods();
+    DEBUG_LOG("discover_mods() discovered count: " + std::to_string(discovered.size()));
     logger_->info("ModRegistry", "Discovered " + std::to_string(discovered.size()) + " enabled mods");
+    DEBUG_LOG("discover_mods() EXIT");
 }
 
 bool FrameworkCore::all_mods_registered() const {
@@ -139,29 +153,43 @@ bool FrameworkCore::is_polling() const {
 
 // Configuration Management
 bool FrameworkCore::load_config(const std::string& config_path) {
+    DEBUG_LOG("load_config() ENTER: " + config_path);
+    DEBUG_LOG("load_config() calling config_manager_->load_config()");
     bool result = config_manager_->load_config(config_path);
+    DEBUG_LOG("load_config() load_config returned: " + std::string(result ? "true" : "false"));
 
     if (result) {
+        DEBUG_LOG("load_config() getting config");
         // Apply logging configuration
         auto config = config_manager_->get_config();
+        DEBUG_LOG("load_config() config.log_mode: " + config.log_mode);
+        DEBUG_LOG("load_config() config.log_level: " + config.log_level);
+        DEBUG_LOG("load_config() config.log_to_file: " + std::string(config.log_to_file ? "true" : "false"));
+        DEBUG_LOG("load_config() config.log_file_path: " + config.log_file_path);
 
         // Set log mode and verbosity
+        DEBUG_LOG("load_config() setting log mode and verbosity");
         logger_->set_mode(Logger::string_to_mode(config.log_mode));
         logger_->set_verbosity(Logger::string_to_level(config.log_level));
+        DEBUG_LOG("load_config() log mode and verbosity set");
 
         // Enable/disable file logging based on config
         if (config.log_to_file) {
+            DEBUG_LOG("load_config() enabling file logging: " + config.log_file_path);
             bool file_enabled = logger_->enable_file_logging(config.log_file_path);
+            DEBUG_LOG("load_config() file logging enabled: " + std::string(file_enabled ? "true" : "false"));
             if (file_enabled) {
                 logger_->info("FrameworkCore", "File logging enabled: " + config.log_file_path);
             } else {
                 logger_->warning("FrameworkCore", "Failed to enable file logging: " + config.log_file_path);
             }
         } else {
+            DEBUG_LOG("load_config() disabling file logging");
             logger_->disable_file_logging();
         }
     }
 
+    DEBUG_LOG("load_config() EXIT");
     return result;
 }
 

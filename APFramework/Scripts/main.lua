@@ -83,6 +83,15 @@ local function initialize_framework()
         return
     end
 
+    -- Load config into C++ framework for logger setup
+    print("[APFramework] Loading C++ framework configuration...")
+    local cpp_config_loaded = framework:load_config(CONFIG_PATH)
+    if cpp_config_loaded then
+        print("[APFramework] C++ framework config loaded - file logging enabled")
+    else
+        print("[APFramework] WARNING: C++ framework config load failed - file logging may not work")
+    end
+
     state.initialized = true
     print("[APFramework] Framework initialized successfully")
 end

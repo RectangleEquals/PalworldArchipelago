@@ -49,6 +49,7 @@ void ap_client_set_registration_complete_callback(APClientHandle handle,
 // Utility functions
 const char* ap_client_get_last_error(APClientHandle handle);
 void ap_client_free_string(const char* str);
+bool ap_client_is_connected(APClientHandle handle);
 
 #ifdef __cplusplus
 }

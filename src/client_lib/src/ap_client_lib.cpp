@@ -254,3 +254,12 @@ const char* ap_client_get_last_error(APClientHandle handle) {
 void ap_client_free_string(const char* str) {
     delete[] str;
 }
+
+bool ap_client_is_connected(APClientHandle handle) {
+    if (!handle) {
+        return false;
+    }
+
+    auto* instance = static_cast<APClientInstance*>(handle);
+    return instance->ipc->is_connected();
+}
