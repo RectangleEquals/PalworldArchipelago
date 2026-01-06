@@ -19,7 +19,6 @@ local FRAMEWORK_MOD_ID = "archipelago.palworld.framework"
 local CAPABILITIES_PATH = nil
 
 -- Initialize logger FIRST (before creating framework)
-FrameworkWrapper.init_logger(LOG_PATH)
 print("[APFramework] Logger initialized at: " .. LOG_PATH)
 
 -- Global state

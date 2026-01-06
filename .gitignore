@@ -104,3 +104,9 @@ worlds/**/*.pyc
 
 # Private documentation prompts
 docs/.claude/PreviousPrompts/
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z

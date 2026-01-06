@@ -8,11 +8,6 @@ local core = require("APFrameworkCore")
 local FrameworkWrapper = {}
 FrameworkWrapper.__index = FrameworkWrapper
 
--- Initialize logger (must be called before creating framework)
-function FrameworkWrapper.init_logger(log_path)
-    core.init_logger(log_path)
-end
-
 function FrameworkWrapper:new(pipe_name)
     local obj = {
         handle = core.create(pipe_name),

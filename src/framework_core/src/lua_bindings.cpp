@@ -14,12 +14,6 @@ static FrameworkCore* check_framework(lua_State* L, int index) {
     return *static_cast<FrameworkCore**>(ud);
 }
 
-// framework.init_logger(log_file_path) - DEPRECATED: Logger now integrated into FrameworkCore
-static int lua_init_logger(lua_State* L) {
-    // No-op: Logger is now initialized automatically by FrameworkCore
-    return 0;
-}
-
 // framework.create(pipe_name) -> handle
 static int lua_framework_create(lua_State* L) {
     const char* pipe_name = luaL_checkstring(L, 1);
@@ -201,10 +195,6 @@ extern "C" __declspec(dllexport) int luaopen_APFrameworkCore(lua_State* L) {
 
     // Create module table
     lua_newtable(L);
-
-    // Add init_logger function
-    lua_pushcfunction(L, lua_init_logger);
-    lua_setfield(L, -2, "init_logger");
 
     // Add create function
     lua_pushcfunction(L, lua_framework_create);
