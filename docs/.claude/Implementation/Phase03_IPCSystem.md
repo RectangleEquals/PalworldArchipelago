@@ -305,7 +305,9 @@ private:
    }
    ```
 
-4. **NOTIFICATION** - Server → Client(s)
+4. **NOTIFICATION** - Bidirectional (Client ↔ Server)
+
+   **Server → Client(s)** (Lifecycle events):
    ```json
    {
      "type": "notification",
@@ -317,27 +319,113 @@ private:
    }
    ```
 
-5. **AP_MESSAGE** - Server ↔ Client (Archipelago server messages)
+   **Client → Server** (Location checks - game events):
    ```json
    {
-     "type": "ap_message",
-     "to_mod_id": "subscribed.mod.id",
+     "type": "notification",
+     "from_mod_id": "author.palworld.chestshuffle",
      "data": {
-       "ap_type": "LocationScout|ItemSend|etc",
-       "payload": { /* AP-specific data */ }
+       "event": "LOCATION_CHECK",
+       "location_id": 12345
      }
    }
    ```
 
+   **Note**: Mods that declare locations in their capabilities are **solely responsible** for:
+   - Detecting when that location is checked in-game (e.g., chest opened, boss defeated)
+   - Sending the LOCATION_CHECK notification to the framework
+   - The framework then forwards this to APClient, which sends it to the AP server
+
+5. **AP_MESSAGE** - Server → Client ONLY (AP server messages routed to mods)
+
+   **IMPORTANT**: This message type is strictly for messages **originating from the AP server** being routed to mods. Game events (like location checks) use NOTIFICATION type instead.
+
+   ```json
+   {
+     "type": "ap_message",
+     "to_mod_id": "author.palworld.chestshuffle",
+     "data": {
+       "ap_type": "ReceivedItems",
+       "payload": {
+         "index": 42,
+         "items": [
+           {
+             "item": 1001,
+             "location": 2001,
+             "player": 1,
+             "flags": 1
+           }
+         ]
+       }
+     }
+   }
+   ```
+
+   Examples of AP_MESSAGE payloads:
+   - `ReceivedItems`: Items sent to this player from AP server
+   - `LocationInfo`: Response to LocationScout request
+   - `PrintJSON`: Chat/notification messages from AP server
+   - `RoomUpdate`: Server state changes
+
 **Size Limits**:
 - Max message size: Configurable via `MAX_IPC_MESSAGE_SIZE_KB` (default 1MB)
 - Messages exceeding limit are rejected with error
+
+**Message Flow Examples**:
+
+**Complete Location Check Flow** (Client → Server → AP Server):
+```
+1. Game Event (chest opened)
+   ↓
+2. Mod detects event: OnChestOpened(chest_id)
+   ↓
+3. Mod sends NOTIFICATION to Framework:
+   {
+     "type": "notification",
+     "from_mod_id": "author.palworld.chestshuffle",
+     "data": {
+       "event": "LOCATION_CHECK",
+       "location_id": 12345
+     }
+   }
+   ↓
+4. Framework (APIPCServer) receives message
+   ↓
+5. Framework routes to APManager
+   ↓
+6. APManager forwards to APClient
+   ↓
+7. APClient sends LocationChecks packet to AP server via WebSocket
+```
+
+**Complete Item Receipt Flow** (AP Server → Server → Client):
+```
+1. AP Server sends ReceivedItems packet via WebSocket
+   ↓
+2. APClient (polling thread) receives packet
+   ↓
+3. APMessageRouter determines item ownership from capabilities
+   ↓
+4. APIPCServer sends AP_MESSAGE to owning mod:
+   {
+     "type": "ap_message",
+     "to_mod_id": "author.palworld.chestshuffle",
+     "data": {
+       "ap_type": "ReceivedItems",
+       "payload": { /* item data */ }
+     }
+   }
+   ↓
+5. Mod receives message and applies item effect
+```
 
 **Acceptance Criteria**:
 - ✅ All message types documented and implemented
 - ✅ JSON serialization/deserialization working
 - ✅ Size limit enforced
 - ✅ msg_id correlation for request/response
+- ✅ Bidirectional flow clearly documented
+- ✅ Location check flow (Client → Server) distinguished from AP messages (Server → Client)
 
 ---
 

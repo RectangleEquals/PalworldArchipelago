@@ -1055,6 +1055,11 @@ end
 }
 ```
 
+**Important**: Mods that declare locations in their capabilities are **solely responsible** for:
+1. Detecting when that location is checked in-game (e.g., chest opened, boss defeated)
+2. Sending this LOCATION_CHECK notification to the framework
+3. The framework routes this to APClient, which forwards to the AP server
+
 **LOCATION_SCOUT** - Query items at locations
 ```json
 {
@@ -1236,19 +1241,43 @@ end
 }
 ```
 
+### Message Routing Architecture
+
+**Two-Way Message Flow**:
+
+**Client → Framework → AP Server** (Game events):
+- Mods detect game events (location checks, status updates)
+- Mods send NOTIFICATION IPC messages to framework
+- Framework routes to APClient
+- APClient sends to AP server via WebSocket
+
+**AP Server → Framework → Client** (AP protocol messages):
+- AP server sends protocol packets via WebSocket
+- APClient receives and buffers packets
+- APMessageRouter translates to IPC messages
+- Framework sends to appropriate mod(s) via IPC
+
 ### AP Protocol Message Mapping
 
 The APMessageRouter translates AP protocol packets to IPC messages:
 
-| AP Packet | IPC Command | Routing |
-|-----------|-------------|---------|
-| ReceivedItems | ITEM_RECEIVED | To item owner (per item) |
-| LocationInfo | LOCATION_INFO | To requesting mod |
-| PrintJSON | PRINT_MESSAGE | Broadcast to all |
-| RoomUpdate | ROOM_UPDATE | Broadcast to all |
-| Connected | CONNECTED | Broadcast to all |
-| ConnectionRefused | CONNECTION_REFUSED | Broadcast to all |
-| DataPackage | (Cached internally) | N/A |
+| Direction | AP Packet / Game Event | IPC Type | IPC Command | Routing |
+|-----------|------------------------|----------|-------------|---------|
+| **Server → Client** | ReceivedItems | ap_message | ITEM_RECEIVED | To item owner (per item) |
+| **Server → Client** | LocationInfo | ap_message | LOCATION_INFO | To requesting mod |
+| **Server → Client** | PrintJSON | ap_message | PRINT_MESSAGE | Broadcast to all |
+| **Server → Client** | RoomUpdate | ap_message | ROOM_UPDATE | Broadcast to all |
+| **Server → Client** | Connected | ap_message | CONNECTED | Broadcast to all |
+| **Server → Client** | ConnectionRefused | ap_message | CONNECTION_REFUSED | Broadcast to all |
+| **Server → Client** | DataPackage | (Cached internally) | N/A | N/A |
+| **Client → Server** | Location Check | notification | LOCATION_CHECK | From mod → APClient → AP server |
+| **Client → Server** | Location Scout | request | LOCATION_SCOUT | From mod → APClient → AP server |
+| **Client → Server** | Status Update | notification | STATUS_UPDATE | From mod → APClient → AP server |
+
+**Key Distinction**:
+- `ap_message` type: Used **only** for messages originating from AP server being routed to mods
+- `notification` type: Used for game events from mods being sent to framework/AP server
+- `request` type: Used for mods requesting information from framework/AP server (with response expected)
 
 ---
 

@@ -98,11 +98,26 @@ As to what exactly *CAN* go in here is currently difficult for me to ascertain, 
 
 6.) Restart game (or APFrameworkCore receives "CMD_RESYNC" request from a priority client, which broadcasts "RESYNC" lifecycle message to all non-priority AP Clients) —> Framework waits for all discovered mods to register again (as described in step #3) —> framework connects to AP Server -> framework caches data packages from AP World and synchronizes state with the world —> main loop begins (player can start playing the game)
 
-7a.) AP server receives item from some other game —> AP server sends item to framework —> framework sees item, knows which mod to send it to —> mod enforces it's earlier "promise" by enforcing it's capability rule (ie, forcing a specific tech to be unlocked, etc) 
+7a.) **Item Receipt Flow (AP Server → Framework → Mod)**:
+   - AP server receives item from some other game
+   - AP server sends `ReceivedItems` packet to framework via WebSocket
+   - APClient receives packet, APMessageRouter determines item ownership from capabilities
+   - Framework sends `ap_message` type IPC message to owning mod
+   - Mod enforces its earlier "promise" by applying the capability rule (e.g., unlocking a specific tech)
 
-7b.) Mod finds location check —> mod sends notification to framework —> framework notifies server —> server notifies other game about sent item
+7b.) **Location Check Flow (Mod → Framework → AP Server)**:
+   - Mod detects game event (chest opened, boss defeated, etc.)
+   - **Mod is solely responsible for detecting locations it declared in capabilities**
+   - Mod sends `notification` type IPC message with `LOCATION_CHECK` to framework
+   - Framework routes to APClient, which sends `LocationChecks` packet to AP server
+   - Server processes check and notifies other games about sent items
 
-7c.) Framework receives location scout —> routes notification to correct mod —> mod reacts & replies with relevant data
+7c.) **Location Scout Flow (Mod ↔ Framework ↔ AP Server)**:
+   - Mod sends `request` type IPC message with `LOCATION_SCOUT` to framework
+   - Framework routes to APClient, which sends `LocationScouts` packet to AP server
+   - Server responds with `LocationInfo` packet
+   - Framework sends `ap_message` type IPC message with location data back to requesting mod
+   - Mod reacts and displays/uses the scouted location information
 
 ## Dependency Tree
 - APFrameworkCore:

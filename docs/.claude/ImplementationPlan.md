@@ -6,6 +6,7 @@ This document provides a comprehensive implementation plan for the Palworld Arch
 
 **Architecture Reference**: [ARCHITECTURE.md](ARCHITECTURE.md)
 **Architecture Review**: [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md)
+**Message Flow Reference**: [MessageFlowReference.md](MessageFlowReference.md)
 
 ---
 
