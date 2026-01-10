@@ -92,7 +92,7 @@
 void APPollingThread::polling_loop() {
     while (!should_stop_) {
         try {
-            ap_client_->poll();  // No state check!
+            ap_client_->poll();  // No state check! And incorrect sleep interval usage!
             auto messages = ap_client_->get_messages();
             for (const auto& msg : messages) {
                 message_router_->route_ap_message(msg);
@@ -100,7 +100,7 @@ void APPollingThread::polling_loop() {
         } catch (const std::exception& e) {
             // Log error but continue polling
         }
-        std::this_thread::sleep_for(poll_interval_);
+        std::this_thread::sleep_for(poll_interval_);  // This creates sleep interval, not polling interval
     }
 }
 ```
@@ -108,23 +108,35 @@ void APPollingThread::polling_loop() {
 **Required Fix**:
 ```cpp
 void APPollingThread::polling_loop() {
-    while (!should_stop_) {
-        try {
-            // Check if we're in a state where polling makes sense
-            auto current_phase = ap_manager_->get_current_phase();
-            if (current_phase == LifecyclePhase::CONNECTED_AND_SYNCING ||
-                current_phase == LifecyclePhase::RUNNING) {
+    auto last_poll = std::chrono::steady_clock::now();
 
-                ap_client_->poll();
-                auto messages = ap_client_->get_messages();
-                for (const auto& msg : messages) {
-                    message_router_->route_ap_message(msg);
+    while (!should_stop_) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_poll);
+
+        // Only poll when the configured interval has elapsed
+        if (elapsed >= poll_interval_) {
+            last_poll = now;
+
+            try {
+                // Check if we're in a state where polling makes sense
+                auto current_phase = ap_manager_->get_current_phase();
+                if (current_phase == LifecyclePhase::CONNECTED_AND_SYNCING ||
+                    current_phase == LifecyclePhase::RUNNING) {
+
+                    ap_client_->poll();
+                    auto messages = ap_client_->get_messages();
+                    for (const auto& msg : messages) {
+                        message_router_->route_ap_message(msg);
+                    }
                 }
+            } catch (const std::exception& e) {
+                // Log error but continue polling
             }
-        } catch (const std::exception& e) {
-            // Log error but continue polling
         }
-        std::this_thread::sleep_for(poll_interval_);
+
+        // Small sleep to prevent busy-waiting
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 ```

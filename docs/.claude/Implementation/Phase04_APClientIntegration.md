@@ -59,33 +59,44 @@ public:
 };
 ```
 
-**APPollingThread Implementation** (from ARCHITECTURE.md fix):
+**APPollingThread Implementation**:
 ```cpp
 void APPollingThread::polling_loop() {
+    auto last_poll = std::chrono::steady_clock::now();
+
     while (!should_stop_) {
-        try {
-            // Check lifecycle state - only poll when in appropriate states
-            auto current_phase = ap_manager_->get_current_phase();
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_poll);
 
-            // Only poll and route messages when connected to AP server
-            if (current_phase == LifecyclePhase::CONNECTED_AND_SYNCING ||
-                current_phase == LifecyclePhase::RUNNING) {
+        // Only poll when the interval has elapsed
+        if (elapsed >= poll_interval_) {
+            last_poll = now;
 
-                ap_client_->poll();
-                auto messages = ap_client_->get_messages();
+            try {
+                // Check lifecycle state - only poll when in appropriate states
+                auto current_phase = ap_manager_->get_current_phase();
 
-                for (const auto& msg : messages) {
-                    message_router_->route_ap_message(msg);
+                // Only poll and route messages when connected to AP server
+                if (current_phase == LifecyclePhase::CONNECTED_AND_SYNCING ||
+                    current_phase == LifecyclePhase::RUNNING) {
+
+                    ap_client_->poll();
+                    auto messages = ap_client_->get_messages();
+
+                    for (const auto& msg : messages) {
+                        message_router_->route_ap_message(msg);
+                    }
                 }
-            }
-            // In other states, skip polling to avoid processing messages
-            // during inconsistent framework state
+                // In other states, skip polling to avoid processing messages
+                // during inconsistent framework state
 
-        } catch (const std::exception& e) {
-            AP_LOG_ERROR("Polling error: " + std::string(e.what()));
+            } catch (const std::exception& e) {
+                AP_LOG_ERROR("Polling error: " + std::string(e.what()));
+            }
         }
 
-        std::this_thread::sleep_for(poll_interval_);
+        // Small sleep to prevent busy-waiting
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 ```
