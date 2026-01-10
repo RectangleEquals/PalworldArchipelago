@@ -33,21 +33,53 @@ enum class LogLevel {
     FATAL
 };
 
-// Result type for operations that may fail
-struct VoidResult {
-    bool success;
+// Error codes for standardized error handling
+enum class ErrorCode {
+    SUCCESS = 0,
+    CONFIG_ERROR,
+    INIT_ERROR,
+    IPC_ERROR,
+    CONNECTION_ERROR,
+    TIMEOUT_ERROR,
+    VALIDATION_ERROR,
+    INTERNAL_ERROR,
+    UNKNOWN_ERROR
+};
+
+// Result wrapper for operations with return values
+template<typename T>
+struct Result {
+    T value;
+    ErrorCode error = ErrorCode::SUCCESS;
     std::string error_message;
 
-    static VoidResult success_result() {
-        return {true, ""};
+    bool is_success() const { return error == ErrorCode::SUCCESS; }
+    bool is_error() const { return !is_success(); }
+
+    static Result<T> success(T val) {
+        return Result<T>{std::move(val), ErrorCode::SUCCESS, ""};
     }
 
-    static VoidResult failure(const std::string& msg) {
-        return {false, msg};
+    static Result<T> failure(ErrorCode err, const std::string& msg) {
+        return Result<T>{T{}, err, msg};
+    }
+};
+
+// Void result for operations without return value
+struct VoidResult {
+    ErrorCode error = ErrorCode::SUCCESS;
+    std::string error_message;
+
+    bool is_success() const { return error == ErrorCode::SUCCESS; }
+    bool is_error() const { return !is_success(); }
+
+    static VoidResult success() {
+        return VoidResult{ErrorCode::SUCCESS, ""};
     }
 
-    bool is_success() const { return success; }
-    bool is_failure() const { return !success; }
+    static VoidResult failure(ErrorCode err, const std::string& msg) {
+        return VoidResult{err, msg};
+    }
 };
 
 } // namespace APFramework

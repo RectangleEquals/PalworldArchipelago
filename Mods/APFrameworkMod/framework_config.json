@@ -1,13 +1,28 @@
 {
-	"server": "localhost",
-	"port": 38281,
-	"slot_name": "P1",
-	"password": "",
-	"autoconnect": false,
-	"registration_timeout": 180,
-	"logging": {
-		"mode": "all",
-		"verbosity": "debug",
-		"filepath": "E:\\SteamLibrary\\steamapps\\common\\Palworld\\Pal\\Binaries\\Win64\\ue4ss\\Mods\\APFramework\\apframework.log"
-	}
+  "ap_server": {
+    "server": "archipelago.gg",
+    "port": 38281,
+    "slot_name": "",
+    "password": "",
+    "auto_reconnect": true,
+    "reconnect_delay_ms": 5000,
+    "connection_timeout_ms": 30000
+  },
+  "framework": {
+    "polling_interval_ms": 16,
+    "registration_timeout_ms": 180000,
+    "priority_registration_timeout_ms": 60000,
+    "mods_directory": "Mods",
+    "game_name": "Palworld"
+  },
+  "logging": {
+    "enabled": true,
+    "level": "info",
+    "file": "APFramework.log",
+    "console": false
+  },
+  "ipc": {
+    "endpoint": "\\.\pipe\APFramework",
+    "timeout_ms": 5000
+  }
 }

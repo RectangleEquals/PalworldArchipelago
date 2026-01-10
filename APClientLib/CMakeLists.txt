@@ -21,7 +21,7 @@ target_include_directories(APClientLib
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/nlohmann
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party
         ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/sol2/include
 )
 
