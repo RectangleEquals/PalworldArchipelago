@@ -12,28 +12,32 @@ Establish the foundational project structure, CMake build system, and integrate 
 - Clean, maintainable project structure
 - Properly configured CMake build system
 - All third-party dependencies integrated and verified
-- Successful build on Windows (MSYS2/MinGW)
+- Successful build on Windows with MSVC (Visual Studio 2022)
 
 ---
 
 ## Prerequisites
 
 ### Development Environment
-- **OS**: Windows (MSYS2/MinGW or Visual Studio)
+- **OS**: Windows
 - **CMake**: 3.20 or higher
-- **Compiler**: GCC 11+ (MinGW) or MSVC 2019+
+- **Compiler**: MSVC 2019+ (Visual Studio 2022 recommended)
 - **Git**: For submodule management
 
 ### Required Third-Party Libraries
 1. **apclientpp** - Archipelago WebSocket client
-   - Location: `third_party/apclientpp`
-   - Includes: wswrap, asio, websocketpp, valijson
-2. **sol2** - Lua C++ bindings
-   - Location: `third_party/sol2`
-   - Version: 3.3.0+
-3. **nlohmann/json** - JSON parsing
+   - Location: `third_party/apclientpp` (git submodule)
+   - Dependencies (all in `third_party/` root):
+     - **wswrap** - `third_party/wswrap` (git submodule)
+     - **asio** - `third_party/asio` (auto-fetched by CMake, v1.12)
+     - **websocketpp** - `third_party/websocketpp` (git submodule)
+     - **valijson** - `third_party/valijson` (git submodule)
+2. **sol2** - Lua C++ bindings (header-only)
+   - Location: `third_party/sol2/` (direct include, NOT submodule)
+   - Files: `third_party/sol2/sol.hpp` and supporting headers
+3. **nlohmann/json** - JSON parsing (header-only)
    - Location: `third_party/nlohmann/`
-   - Version: 3.11.0+
+   - Files: `third_party/nlohmann/json.hpp`
 4. **lua** - Lua 5.4.7 runtime
    - Location: `third_party/lua-5.4.7/`
    - Build as static library
@@ -93,11 +97,17 @@ ipc_design/
 │
 ├── third_party/                            # External dependencies
 │   ├── apclientpp/                         # Git submodule
-│   ├── sol2/                               # Git submodule
-│   ├── nlohmann/                           # Header-only JSON library
+│   ├── wswrap/                             # Git submodule (apclientpp dep)
+│   ├── websocketpp/                        # Git submodule (apclientpp dep)
+│   ├── valijson/                           # Git submodule (apclientpp dep)
+│   ├── asio/                               # Auto-fetched by CMake (apclientpp dep)
+│   ├── sol2/                               # Header-only (direct include, NOT submodule)
+│   │   ├── sol.hpp
+│   │   └── (other sol2 headers)
+│   ├── nlohmann/                           # Header-only (direct include)
 │   │   ├── json.hpp
 │   │   └── json_fwd.hpp
-│   └── lua-5.4.7/                          # Lua runtime
+│   └── lua-5.4.7/                          # Lua runtime (static lib)
 │       ├── CMakeLists.txt
 │       └── src/
 │
@@ -107,18 +117,27 @@ ipc_design/
 │   │   ├── Scripts/
 │   │   │   ├── main.lua                    # UE4SS entry point
 │   │   │   ├── APFramework.lua             # High-level Lua wrapper
+│   │   │   ├── APFrameworkCore.dll         # C++ lib with Lua bindings
+│   │   │   ├── APClient.lua                # Lua wrapper for APClientLib
+│   │   │   ├── APClientLib.dll             # C++ lib with Lua bindings
 │   │   │   └── lunajson/                   # JSON for Lua
-│   │   └── dlls/
-│   │       └── APFrameworkCore.dll         # Built from APFrameworkCore/
+│   │   │       ├── lunajson.lua
+│   │   │       ├── decoder.lua
+│   │   │       ├── encoder.lua
+│   │   │       └── sax.lua
+│   │   └── dlls/                           # (empty - for UE4SS C++ mods only)
 │   │
 │   └── ExampleClientMod/                   # Example AP-enabled mod
 │       ├── enabled.txt
 │       ├── AP_Config.json                  # Mod capabilities
 │       ├── Scripts/
 │       │   ├── main.lua
-│       │   └── APClient.lua                # High-level Lua wrapper
-│       └── dlls/
-│           └── APClientLib.dll             # Built from APClientLib/
+│       │   ├── APClient.lua                # Lua wrapper for APClientLib
+│       │   ├── APClientLib.dll             # C++ lib with Lua bindings
+│       │   └── lunajson/                   # JSON for Lua
+│       │       ├── lunajson.lua
+│       │       └── (other lunajson files)
+│       └── dlls/                           # (empty - for UE4SS C++ mods only)
 │
 ├── docs/
 │   └── .claude/
@@ -214,10 +233,16 @@ if(BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# Installation rules
+# Installation rules (DLLs go in Scripts folder for Lua to load)
 install(TARGETS APFrameworkCore APClientLib
-    RUNTIME DESTINATION Mods/APFrameworkMod/dlls
-    LIBRARY DESTINATION Mods/APFrameworkMod/dlls
+    RUNTIME DESTINATION Mods/APFrameworkMod/Scripts
+    LIBRARY DESTINATION Mods/APFrameworkMod/Scripts
+)
+
+# Copy lunajson files during install
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson
+    DESTINATION Mods/APFrameworkMod/Scripts
+    FILES_MATCHING PATTERN "*.lua"
 )
 ```
 
@@ -444,20 +469,33 @@ set_target_properties(lua_static PROPERTIES
 - ✅ Header files present
 - ✅ Can `#include <sol/sol.hpp>` from projects
 
-#### 4.4: Verify apclientpp
+#### 4.4: Verify apclientpp and Dependencies
 
-**Location**: `third_party/apclientpp/`
+**apclientpp** and its dependencies must be added as git submodules in `third_party/`:
 
-**Action**: Initialize git submodule if missing:
+**Action**: Initialize git submodules if missing:
 ```bash
+# Add apclientpp
 git submodule add https://github.com/black-sliver/apclientpp.git third_party/apclientpp
+
+# Add apclientpp dependencies to third_party root
+git submodule add https://github.com/black-sliver/wswrap.git third_party/wswrap
+git submodule add https://github.com/zaphoyd/websocketpp.git third_party/websocketpp
+git submodule add https://github.com/tristanpenman/valijson.git third_party/valijson
+
+# Update all submodules
 git submodule update --init --recursive
 ```
 
+**Note**: asio (v1.12) will be auto-fetched by CMake using FetchContent (see Design.md for reference).
+
 **Acceptance Criteria**:
-- ✅ Submodule initialized with all nested dependencies
-- ✅ CMakeLists.txt present
-- ✅ Includes wswrap, asio, websocketpp, valijson
+- ✅ apclientpp submodule initialized
+- ✅ wswrap submodule initialized
+- ✅ websocketpp submodule initialized
+- ✅ valijson submodule initialized
+- ✅ All submodules in `third_party/` root directory
+- ✅ apclientpp CMakeLists.txt present and references dependencies
 
 ---
 
@@ -596,20 +634,24 @@ Create similar stub headers and sources for:
 
 ### Step 6: Build Verification
 
-**Commands**:
+**Commands** (for Visual Studio 2022):
 ```bash
 mkdir build
 cd build
-cmake .. -G "MinGW Makefiles"  # Or "Visual Studio 16 2019"
-cmake --build .
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
 ```
 
 **Expected Output**:
-- `build/lib/APFrameworkCore.dll`
-- `build/lib/APClientLib.dll`
-- `build/lib/lua.a` (static lib)
+- `build/bin/Release/APFrameworkCore.dll`
+- `build/bin/Release/APClientLib.dll`
+- `build/lib/Release/lua.lib` (static lib)
 - No compilation errors
 - Warnings acceptable at this stage
+
+**Note**: If using a different Visual Studio version, adjust the generator accordingly:
+- VS 2019: `-G "Visual Studio 16 2019"`
+- VS 2022: `-G "Visual Studio 17 2022"`
 
 **Acceptance Criteria**:
 - ✅ CMake configuration succeeds
