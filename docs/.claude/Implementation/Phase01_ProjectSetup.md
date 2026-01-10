@@ -107,9 +107,15 @@ ipc_design/
 │   ├── nlohmann/                           # Header-only (direct include)
 │   │   ├── json.hpp
 │   │   └── json_fwd.hpp
-│   └── lua-5.4.7/                          # Lua runtime (static lib)
-│       ├── CMakeLists.txt
-│       └── src/
+│   ├── lua-5.4.7/                          # Lua runtime (static lib)
+│   │   ├── CMakeLists.txt
+│   │   └── src/
+│   └── lua/                                # Lua mod dependencies
+│       ├── lunajson.lua
+│       └── lunajson/
+│           ├── decoder.lua
+│           ├── encoder.lua
+│           └── sax.lua
 │
 ├── Mods/                                   # UE4SS mods
 │   ├── APFrameworkMod/                     # Main framework Lua mod
@@ -120,8 +126,8 @@ ipc_design/
 │   │   │   ├── APFrameworkCore.dll         # C++ lib with Lua bindings
 │   │   │   ├── APClient.lua                # Lua wrapper for APClientLib
 │   │   │   ├── APClientLib.dll             # C++ lib with Lua bindings
-│   │   │   └── lunajson/                   # JSON for Lua
-│   │   │       ├── lunajson.lua
+│   │   │   ├── lunajson.lua                # JSON for Lua (main module)
+│   │   │   └── lunajson/                   # JSON for Lua (submodules)
 │   │   │       ├── decoder.lua
 │   │   │       ├── encoder.lua
 │   │   │       └── sax.lua
@@ -134,9 +140,11 @@ ipc_design/
 │       │   ├── main.lua
 │       │   ├── APClient.lua                # Lua wrapper for APClientLib
 │       │   ├── APClientLib.dll             # C++ lib with Lua bindings
-│       │   └── lunajson/                   # JSON for Lua
-│       │       ├── lunajson.lua
-│       │       └── (other lunajson files)
+│       │   ├── lunajson.lua                # JSON for Lua (main module)
+│       │   └── lunajson/                   # JSON for Lua (submodules)
+│       │       ├── decoder.lua
+│       │       ├── encoder.lua
+│       │       └── sax.lua
 │       └── dlls/                           # (empty - for UE4SS C++ mods only)
 │
 ├── docs/
@@ -240,6 +248,9 @@ install(TARGETS APFrameworkCore APClientLib
 )
 
 # Copy lunajson files during install
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson.lua
+    DESTINATION Mods/APFrameworkMod/Scripts
+)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson
     DESTINATION Mods/APFrameworkMod/Scripts
     FILES_MATCHING PATTERN "*.lua"

@@ -92,8 +92,8 @@ APCapabilities.json
 *.ap_config.json.bak
 
 # Ignore compiled client libraries in APFramework mod folder
-APFramework/Scripts/lib/*.dll
-APFramework/Scripts/lib/*.so
+APFramework/Scripts/*.dll
+APFramework/Scripts/*.so
 
 # But keep the directory structure
 !APFramework/Scripts/lib/.gitkeep
@@ -110,3 +110,6 @@ docs/.claude/PreviousPrompts/
 *.tar.gz
 *.rar
 *.7z
+
+# Git patches
+*.patch

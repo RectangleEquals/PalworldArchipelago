@@ -1,0 +1,13 @@
+{
+	"server": "localhost",
+	"port": 38281,
+	"slot_name": "P1",
+	"password": "",
+	"autoconnect": false,
+	"registration_timeout": 180,
+	"logging": {
+		"mode": "all",
+		"verbosity": "debug",
+		"filepath": "E:\\SteamLibrary\\steamapps\\common\\Palworld\\Pal\\Binaries\\Win64\\ue4ss\\Mods\\APFramework\\apframework.log"
+	}
+}

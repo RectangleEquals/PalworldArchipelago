@@ -42,7 +42,7 @@ This document provides a comprehensive implementation plan for the Palworld Arch
 - APFrameworkCore project structure (include/src separation)
 - APClientLib project structure
 - All third-party libraries integrated (apclientpp, sol2, nlohmann::json, lua)
-- Build verification on Windows (MSYS2/MinGW)
+- Build verification on Windows with MSVC (Visual Studio 2022)
 
 **Duration Estimate**: Foundation phase
 **Dependencies**: None
@@ -250,7 +250,7 @@ This document provides a comprehensive implementation plan for the Palworld Arch
 
 **Windows Focus**:
 - Named Pipes for IPC (Windows-specific)
-- MSYS2/MinGW build toolchain
+- MSVC (Visual Studio 2022) build toolchain
 - UE4SS is Windows-only currently
 
 **Future Cross-Platform** (out of scope for now):
@@ -262,7 +262,7 @@ This document provides a comprehensive implementation plan for the Palworld Arch
 ## Getting Started
 
 1. **Review**: Read [ARCHITECTURE.md](ARCHITECTURE.md) thoroughly
-2. **Setup**: Ensure development environment is ready (MSYS2, CMake, compiler)
+2. **Setup**: Ensure development environment is ready (Visual Studio 2022, CMake, Git)
 3. **Begin**: Start with [Phase 01: Project Setup](Implementation/Phase01_ProjectSetup.md)
 4. **Iterate**: Complete each phase, review, and proceed to next
 
