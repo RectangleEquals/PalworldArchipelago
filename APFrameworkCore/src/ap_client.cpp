@@ -2,11 +2,6 @@
 #include "ap_logger.h"
 #include <sstream>
 
-// Windows headers define ERROR as a macro, which conflicts with LogLevel::ERROR
-#ifdef ERROR
-#undef ERROR
-#endif
-
 namespace APFramework {
 
 APClient::APClient(APLogger* logger)
@@ -68,7 +63,7 @@ void APClient::connect_async(
         // We'll track connection state through callbacks
 
         if (logger_) {
-            logger_->log(LogLevel::INFO, "APClient", "Initiating connection to " + uri);
+            logger_->log(LogLevel::LOG_INFO, "APClient", "Initiating connection to " + uri);
         }
 
     } catch (const std::exception& e) {
@@ -77,7 +72,7 @@ void APClient::connect_async(
             callback(false, std::string("Failed to create APClient: ") + e.what());
         }
         if (logger_) {
-            logger_->log(LogLevel::ERROR, "APClient", std::string("Connection failed: ") + e.what());
+            logger_->log(LogLevel::LOG_ERROR, "APClient", std::string("Connection failed: ") + e.what());
         }
     }
 }
@@ -95,7 +90,7 @@ void APClient::disconnect() {
     connection_callback_ = nullptr;
 
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APClient", "Disconnected from AP server");
+        logger_->log(LogLevel::LOG_INFO, "APClient", "Disconnected from AP server");
     }
 }
 
@@ -162,7 +157,7 @@ VoidResult APClient::send_location_checks(const std::vector<int64_t>& locations)
     }
 
     if (logger_) {
-        logger_->log(LogLevel::DEBUG, "APClient", "Sent " + std::to_string(locations.size()) + " location checks");
+        logger_->log(LogLevel::LOG_DEBUG, "APClient", "Sent " + std::to_string(locations.size()) + " location checks");
     }
 
     return VoidResult::success();
@@ -186,7 +181,7 @@ VoidResult APClient::send_location_scouts(const std::vector<int64_t>& locations,
     }
 
     if (logger_) {
-        logger_->log(LogLevel::DEBUG, "APClient", "Sent " + std::to_string(locations.size()) + " location scouts");
+        logger_->log(LogLevel::LOG_DEBUG, "APClient", "Sent " + std::to_string(locations.size()) + " location scouts");
     }
 
     return VoidResult::success();
@@ -208,7 +203,7 @@ VoidResult APClient::send_status_update(::APClient::ClientStatus status) {
     }
 
     if (logger_) {
-        logger_->log(LogLevel::DEBUG, "APClient", "Sent status update");
+        logger_->log(LogLevel::LOG_DEBUG, "APClient", "Sent status update");
     }
 
     return VoidResult::success();
@@ -280,7 +275,7 @@ std::string APClient::get_location_name(int64_t location_id, const std::string& 
 
 void APClient::on_socket_connected() {
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APClient", "WebSocket connected");
+        logger_->log(LogLevel::LOG_INFO, "APClient", "WebSocket connected");
     }
 
     // Connection not complete until slot is connected
@@ -289,7 +284,7 @@ void APClient::on_socket_connected() {
 
 void APClient::on_socket_error(const std::string& error) {
     if (logger_) {
-        logger_->log(LogLevel::ERROR, "APClient", "WebSocket error: " + error);
+        logger_->log(LogLevel::LOG_ERROR, "APClient", "WebSocket error: " + error);
     }
 
     if (connection_in_progress_ && !connection_completed_) {
@@ -303,7 +298,7 @@ void APClient::on_socket_error(const std::string& error) {
 
 void APClient::on_socket_disconnected() {
     if (logger_) {
-        logger_->log(LogLevel::WARN, "APClient", "WebSocket disconnected");
+        logger_->log(LogLevel::LOG_WARN, "APClient", "WebSocket disconnected");
     }
 
     // Queue disconnection message
@@ -326,7 +321,7 @@ void APClient::on_socket_disconnected() {
 
 void APClient::on_slot_connected(const nlohmann::json& slot_data) {
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APClient", "Slot connected successfully");
+        logger_->log(LogLevel::LOG_INFO, "APClient", "Slot connected successfully");
     }
 
     // Connection complete!
@@ -357,7 +352,7 @@ void APClient::on_slot_refused(const std::list<std::string>& errors) {
     std::string error_msg = ss.str();
 
     if (logger_) {
-        logger_->log(LogLevel::ERROR, "APClient", error_msg);
+        logger_->log(LogLevel::LOG_ERROR, "APClient", error_msg);
     }
 
     connection_in_progress_ = false;
@@ -381,7 +376,7 @@ void APClient::on_slot_refused(const std::list<std::string>& errors) {
 
 void APClient::on_room_info() {
     if (logger_) {
-        logger_->log(LogLevel::DEBUG, "APClient", "Received RoomInfo");
+        logger_->log(LogLevel::LOG_DEBUG, "APClient", "Received RoomInfo");
     }
 
     // Queue RoomInfo message
@@ -400,7 +395,7 @@ void APClient::on_room_info() {
 
 void APClient::on_items_received(const std::list<::APClient::NetworkItem>& items) {
     if (logger_) {
-        logger_->log(LogLevel::DEBUG, "APClient", "Received " + std::to_string(items.size()) + " items");
+        logger_->log(LogLevel::LOG_DEBUG, "APClient", "Received " + std::to_string(items.size()) + " items");
     }
 
     // Queue ReceivedItems message
@@ -427,7 +422,7 @@ void APClient::on_items_received(const std::list<::APClient::NetworkItem>& items
 
 void APClient::on_location_info(const std::list<::APClient::NetworkItem>& items) {
     if (logger_) {
-        logger_->log(LogLevel::DEBUG, "APClient", "Received LocationInfo for " + std::to_string(items.size()) + " locations");
+        logger_->log(LogLevel::LOG_DEBUG, "APClient", "Received LocationInfo for " + std::to_string(items.size()) + " locations");
     }
 
     // Queue LocationInfo message
@@ -464,7 +459,7 @@ void APClient::on_print_json(const nlohmann::json& data) {
 
 void APClient::on_room_update() {
     if (logger_) {
-        logger_->log(LogLevel::DEBUG, "APClient", "Received RoomUpdate");
+        logger_->log(LogLevel::LOG_DEBUG, "APClient", "Received RoomUpdate");
     }
 
     // Queue RoomUpdate message
@@ -485,7 +480,7 @@ void APClient::check_connection_timeout() {
         connection_in_progress_ = false;
 
         if (logger_) {
-            logger_->log(LogLevel::ERROR, "APClient", "Connection timeout after " + std::to_string(connection_timeout_.count()) + "ms");
+            logger_->log(LogLevel::LOG_ERROR, "APClient", "Connection timeout after " + std::to_string(connection_timeout_.count()) + "ms");
         }
 
         if (connection_callback_) {

@@ -93,7 +93,7 @@ private:
 
     struct LoggingConfig {
         bool enabled = true;
-        LogLevel level = LogLevel::INFO;
+        LogLevel level = LogLevel::LOG_INFO;
         std::string file = "APFramework.log";
         bool console = false;  // If true, logs go to priority clients
     } logging_;

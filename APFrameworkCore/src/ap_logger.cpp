@@ -60,12 +60,12 @@ void APLogger::log(LogLevel level, const std::string& component, const std::stri
     log(level, "[" + component + "] " + message);
 }
 
-void APLogger::trace(const std::string& message) { log(LogLevel::TRACE, message); }
-void APLogger::debug(const std::string& message) { log(LogLevel::DEBUG, message); }
-void APLogger::info(const std::string& message) { log(LogLevel::INFO, message); }
-void APLogger::warn(const std::string& message) { log(LogLevel::WARN, message); }
-void APLogger::error(const std::string& message) { log(LogLevel::ERROR, message); }
-void APLogger::fatal(const std::string& message) { log(LogLevel::FATAL, message); }
+void APLogger::trace(const std::string& message) { log(LogLevel::LOG_TRACE, message); }
+void APLogger::debug(const std::string& message) { log(LogLevel::LOG_DEBUG, message); }
+void APLogger::info(const std::string& message) { log(LogLevel::LOG_INFO, message); }
+void APLogger::warn(const std::string& message) { log(LogLevel::LOG_WARN, message); }
+void APLogger::error(const std::string& message) { log(LogLevel::LOG_ERROR, message); }
+void APLogger::fatal(const std::string& message) { log(LogLevel::LOG_FATAL, message); }
 
 void APLogger::set_log_callback(LogCallback callback) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -101,12 +101,12 @@ std::string APLogger::get_timestamp() const {
 
 std::string APLogger::level_to_string(LogLevel level) const {
     switch (level) {
-        case LogLevel::TRACE: return "TRACE";
-        case LogLevel::DEBUG: return "DEBUG";
-        case LogLevel::INFO:  return "INFO ";
-        case LogLevel::WARN:  return "WARN ";
-        case LogLevel::ERROR: return "ERROR";
-        case LogLevel::FATAL: return "FATAL";
+        case LogLevel::LOG_TRACE: return "TRACE";
+        case LogLevel::LOG_DEBUG: return "DEBUG";
+        case LogLevel::LOG_INFO:  return "INFO ";
+        case LogLevel::LOG_WARN:  return "WARN ";
+        case LogLevel::LOG_ERROR: return "ERROR";
+        case LogLevel::LOG_FATAL: return "FATAL";
         default: return "UNKNOWN";
     }
 }

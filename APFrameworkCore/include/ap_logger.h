@@ -49,7 +49,7 @@ private:
     std::string get_timestamp() const;
     std::string level_to_string(LogLevel level) const;
 
-    LogLevel min_level_ = LogLevel::INFO;
+    LogLevel min_level_ = LogLevel::LOG_INFO;
     std::ofstream log_file_;
     bool console_mode_ = false;
     LogCallback log_callback_;

@@ -120,15 +120,15 @@ std::vector<std::string> APConfig::get_errors() const {
 }
 
 LogLevel APConfig::parse_log_level(const std::string& level_str) const {
-    if (level_str == "trace") return LogLevel::TRACE;
-    if (level_str == "debug") return LogLevel::DEBUG;
-    if (level_str == "info") return LogLevel::INFO;
-    if (level_str == "warn") return LogLevel::WARN;
-    if (level_str == "error") return LogLevel::ERROR;
-    if (level_str == "fatal") return LogLevel::FATAL;
+    if (level_str == "trace") return LogLevel::LOG_TRACE;
+    if (level_str == "debug") return LogLevel::LOG_DEBUG;
+    if (level_str == "info") return LogLevel::LOG_INFO;
+    if (level_str == "warn") return LogLevel::LOG_WARN;
+    if (level_str == "error") return LogLevel::LOG_ERROR;
+    if (level_str == "fatal") return LogLevel::LOG_FATAL;
 
     errors_.push_back("Unknown log level: " + level_str + ", defaulting to INFO");
-    return LogLevel::INFO;
+    return LogLevel::LOG_INFO;
 }
 
 void APConfig::validate_field(bool condition, const std::string& error_msg) const {

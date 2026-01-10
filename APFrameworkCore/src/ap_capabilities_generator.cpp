@@ -28,7 +28,7 @@ Result<nlohmann::json> APCapabilitiesGenerator::generate_capabilities(
     const std::string& game_name) {
 
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APCapabilitiesGenerator",
+        logger_->log(LogLevel::LOG_INFO, "APCapabilitiesGenerator",
             "Generating capabilities for " + std::to_string(mods.size()) + " mods");
     }
 
@@ -50,7 +50,7 @@ Result<nlohmann::json> APCapabilitiesGenerator::generate_capabilities(
     capabilities["options"] = aggregate_options(mods);
 
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APCapabilitiesGenerator", "Capability generation complete");
+        logger_->log(LogLevel::LOG_INFO, "APCapabilitiesGenerator", "Capability generation complete");
     }
 
     return Result<nlohmann::json>::success(capabilities);
@@ -68,7 +68,7 @@ std::vector<ConflictInfo> APCapabilitiesGenerator::detect_conflicts(const nlohma
     std::vector<ConflictInfo> conflicts;
 
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APCapabilitiesGenerator", "Detecting conflicts...");
+        logger_->log(LogLevel::LOG_INFO, "APCapabilitiesGenerator", "Detecting conflicts...");
     }
 
     // Detect duplicate item IDs
@@ -92,7 +92,7 @@ std::vector<ConflictInfo> APCapabilitiesGenerator::detect_conflicts(const nlohma
     conflicts.insert(conflicts.end(), region_conflicts.begin(), region_conflicts.end());
 
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APCapabilitiesGenerator",
+        logger_->log(LogLevel::LOG_INFO, "APCapabilitiesGenerator",
             "Conflict detection complete: " + std::to_string(conflicts.size()) + " conflicts found");
     }
 
@@ -113,7 +113,7 @@ VoidResult APCapabilitiesGenerator::save_to_file(const nlohmann::json& capabilit
         file.close();
 
         if (logger_) {
-            logger_->log(LogLevel::INFO, "APCapabilitiesGenerator",
+            logger_->log(LogLevel::LOG_INFO, "APCapabilitiesGenerator",
                 "Capabilities saved to: " + output_path.string());
         }
 
@@ -136,7 +136,7 @@ Result<nlohmann::json> APCapabilitiesGenerator::load_from_file(const std::filesy
         file >> capabilities;
 
         if (logger_) {
-            logger_->log(LogLevel::INFO, "APCapabilitiesGenerator",
+            logger_->log(LogLevel::LOG_INFO, "APCapabilitiesGenerator",
                 "Capabilities loaded from: " + input_path.string());
         }
 

@@ -139,7 +139,7 @@ private:
 
     struct LoggingConfig {
         bool enabled = true;
-        LogLevel level = LogLevel::INFO;
+        LogLevel level = LogLevel::LOG_INFO;
         std::string file = "APFramework.log";
         bool console = false;  // If true, logs go to priority clients
     } logging_;
@@ -284,15 +284,15 @@ std::vector<std::string> APConfig::get_errors() const {
 }
 
 LogLevel APConfig::parse_log_level(const std::string& level_str) const {
-    if (level_str == "trace") return LogLevel::TRACE;
-    if (level_str == "debug") return LogLevel::DEBUG;
-    if (level_str == "info") return LogLevel::INFO;
-    if (level_str == "warn") return LogLevel::WARN;
-    if (level_str == "error") return LogLevel::ERROR;
-    if (level_str == "fatal") return LogLevel::FATAL;
+    if (level_str == "trace") return LogLevel::LOG_TRACE;
+    if (level_str == "debug") return LogLevel::LOG_DEBUG;
+    if (level_str == "info") return LogLevel::LOG_INFO;
+    if (level_str == "warn") return LogLevel::LOG_WARN;
+    if (level_str == "error") return LogLevel::LOG_ERROR;
+    if (level_str == "fatal") return LogLevel::LOG_FATAL;
 
     errors_.push_back("Unknown log level: " + level_str + ", defaulting to INFO");
-    return LogLevel::INFO;
+    return LogLevel::LOG_INFO;
 }
 
 void APConfig::validate_field(bool condition, const std::string& error_msg) const {
@@ -369,7 +369,7 @@ private:
     std::string get_timestamp() const;
     std::string level_to_string(LogLevel level) const;
 
-    LogLevel min_level_ = LogLevel::INFO;
+    LogLevel min_level_ = LogLevel::LOG_INFO;
     std::ofstream log_file_;
     bool console_mode_ = false;
     LogCallback log_callback_;
@@ -448,12 +448,12 @@ void APLogger::log(LogLevel level, const std::string& message) {
     }
 }
 
-void APLogger::trace(const std::string& message) { log(LogLevel::TRACE, message); }
-void APLogger::debug(const std::string& message) { log(LogLevel::DEBUG, message); }
-void APLogger::info(const std::string& message) { log(LogLevel::INFO, message); }
-void APLogger::warn(const std::string& message) { log(LogLevel::WARN, message); }
-void APLogger::error(const std::string& message) { log(LogLevel::ERROR, message); }
-void APLogger::fatal(const std::string& message) { log(LogLevel::FATAL, message); }
+void APLogger::trace(const std::string& message) { log(LogLevel::LOG_TRACE, message); }
+void APLogger::debug(const std::string& message) { log(LogLevel::LOG_DEBUG, message); }
+void APLogger::info(const std::string& message) { log(LogLevel::LOG_INFO, message); }
+void APLogger::warn(const std::string& message) { log(LogLevel::LOG_WARN, message); }
+void APLogger::error(const std::string& message) { log(LogLevel::LOG_ERROR, message); }
+void APLogger::fatal(const std::string& message) { log(LogLevel::LOG_FATAL, message); }
 
 void APLogger::set_log_callback(LogCallback callback) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -489,12 +489,12 @@ std::string APLogger::get_timestamp() const {
 
 std::string APLogger::level_to_string(LogLevel level) const {
     switch (level) {
-        case LogLevel::TRACE: return "TRACE";
-        case LogLevel::DEBUG: return "DEBUG";
-        case LogLevel::INFO:  return "INFO ";
-        case LogLevel::WARN:  return "WARN ";
-        case LogLevel::ERROR: return "ERROR";
-        case LogLevel::FATAL: return "FATAL";
+        case LogLevel::LOG_TRACE: return "TRACE";
+        case LogLevel::LOG_DEBUG: return "DEBUG";
+        case LogLevel::LOG_INFO:  return "INFO ";
+        case LogLevel::LOG_WARN:  return "WARN ";
+        case LogLevel::LOG_ERROR: return "ERROR";
+        case LogLevel::LOG_FATAL: return "FATAL";
         default: return "UNKNOWN";
     }
 }
@@ -844,13 +844,13 @@ protected:
 
 TEST_F(APLoggerTest, InitializeLogger) {
     auto& logger = APLogger::instance();
-    ASSERT_TRUE(logger.init(LogLevel::DEBUG, test_log_file_, false));
+    ASSERT_TRUE(logger.init(LogLevel::LOG_DEBUG, test_log_file_, false));
     EXPECT_TRUE(std::filesystem::exists(test_log_file_));
 }
 
 TEST_F(APLoggerTest, WriteToFile) {
     auto& logger = APLogger::instance();
-    logger.init(LogLevel::INFO, test_log_file_, false);
+    logger.init(LogLevel::LOG_INFO, test_log_file_, false);
 
     logger.info("Test message");
     logger.warn("Warning message");
@@ -868,7 +868,7 @@ TEST_F(APLoggerTest, WriteToFile) {
 
 TEST_F(APLoggerTest, LogLevelFiltering) {
     auto& logger = APLogger::instance();
-    logger.init(LogLevel::WARN, test_log_file_, false);
+    logger.init(LogLevel::LOG_WARN, test_log_file_, false);
 
     logger.debug("Debug message");  // Should be filtered
     logger.warn("Warning message"); // Should appear
@@ -887,7 +887,7 @@ TEST_F(APLoggerTest, LogLevelFiltering) {
 
 TEST_F(APLoggerTest, ConsoleMode) {
     auto& logger = APLogger::instance();
-    logger.init(LogLevel::INFO, "", true);
+    logger.init(LogLevel::LOG_INFO, "", true);
 
     bool callback_invoked = false;
     std::string received_message;

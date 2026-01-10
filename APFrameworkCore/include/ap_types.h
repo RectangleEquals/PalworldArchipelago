@@ -29,12 +29,12 @@ enum class LifecyclePhase {
 };
 
 enum class LogLevel {
-    TRACE,
-    DEBUG,
-    INFO,
-    WARN,
-    ERROR,
-    FATAL
+    LOG_TRACE,
+    LOG_DEBUG,
+    LOG_INFO,
+    LOG_WARN,
+    LOG_ERROR,
+    LOG_FATAL
 };
 
 // Error codes for standardized error handling

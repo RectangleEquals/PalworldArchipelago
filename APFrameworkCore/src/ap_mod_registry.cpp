@@ -22,7 +22,7 @@ VoidResult APModRegistry::discover_mods(const std::filesystem::path& mods_dir) {
     }
 
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APModRegistry", "Discovering mods in: " + mods_dir.string());
+        logger_->log(LogLevel::LOG_INFO, "APModRegistry", "Discovering mods in: " + mods_dir.string());
     }
 
     size_t discovered_count = 0;
@@ -43,7 +43,7 @@ VoidResult APModRegistry::discover_mods(const std::filesystem::path& mods_dir) {
         auto result = load_mod_config(config_path);
         if (result.is_error()) {
             if (logger_) {
-                logger_->log(LogLevel::WARN, "APModRegistry",
+                logger_->log(LogLevel::LOG_WARN, "APModRegistry",
                     "Failed to load config for " + entry.path().filename().string() + ": " + result.error_message);
             }
             continue;
@@ -55,7 +55,7 @@ VoidResult APModRegistry::discover_mods(const std::filesystem::path& mods_dir) {
         auto it = mods_.find(mod_info.mod_id);
         if (it != mods_.end()) {
             if (logger_) {
-                logger_->log(LogLevel::WARN, "APModRegistry",
+                logger_->log(LogLevel::LOG_WARN, "APModRegistry",
                     "Duplicate mod_id discovered: " + mod_info.mod_id);
             }
             continue;
@@ -72,13 +72,13 @@ VoidResult APModRegistry::discover_mods(const std::filesystem::path& mods_dir) {
 
         if (logger_) {
             std::string priority_str = mod_info.is_priority ? " (priority)" : "";
-            logger_->log(LogLevel::INFO, "APModRegistry",
+            logger_->log(LogLevel::LOG_INFO, "APModRegistry",
                 "Discovered mod: " + mod_info.mod_id + priority_str);
         }
     }
 
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APModRegistry",
+        logger_->log(LogLevel::LOG_INFO, "APModRegistry",
             "Discovery complete: " + std::to_string(discovered_count) + " mods found");
     }
 
@@ -95,7 +95,7 @@ VoidResult APModRegistry::register_mod(const std::string& mod_id,
     // If mod was not discovered, add it now (late discovery)
     if (it == mods_.end()) {
         if (logger_) {
-            logger_->log(LogLevel::WARN, "APModRegistry",
+            logger_->log(LogLevel::LOG_WARN, "APModRegistry",
                 "Registering mod that was not discovered: " + mod_id);
         }
 
@@ -111,7 +111,7 @@ VoidResult APModRegistry::register_mod(const std::string& mod_id,
         mods_[mod_id] = entry;
 
         if (logger_) {
-            logger_->log(LogLevel::INFO, "APModRegistry",
+            logger_->log(LogLevel::LOG_INFO, "APModRegistry",
                 "Registered mod (late discovery): " + mod_id);
         }
 
@@ -131,7 +131,7 @@ VoidResult APModRegistry::register_mod(const std::string& mod_id,
 
     if (logger_) {
         std::string priority_str = is_priority ? " (priority)" : "";
-        logger_->log(LogLevel::INFO, "APModRegistry",
+        logger_->log(LogLevel::LOG_INFO, "APModRegistry",
             "Registered mod: " + mod_id + priority_str);
     }
 
@@ -265,7 +265,7 @@ void APModRegistry::clear() {
     mods_.clear();
 
     if (logger_) {
-        logger_->log(LogLevel::INFO, "APModRegistry", "Registry cleared");
+        logger_->log(LogLevel::LOG_INFO, "APModRegistry", "Registry cleared");
     }
 }
 
