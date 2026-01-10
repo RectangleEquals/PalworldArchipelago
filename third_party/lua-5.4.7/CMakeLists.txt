@@ -38,6 +38,11 @@ set(LUA_CORE_SOURCES
 )
 
 # Build as static library
-add_library(lua STATIC ${LUA_CORE_SOURCES})
+add_library(lua_static STATIC ${LUA_CORE_SOURCES})
 
-target_include_directories(lua PUBLIC src)
+target_include_directories(lua_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+set_target_properties(lua_static PROPERTIES
+    OUTPUT_NAME "lua"
+    POSITION_INDEPENDENT_CODE ON
+)

@@ -40,6 +40,8 @@ Implement foundational classes that all other components depend on: configuratio
 
 **Purpose**: Load, validate, and provide access to framework configuration from `framework_config.json`.
 
+**Note**: The configuration file is located at `Mods/APFrameworkMod/framework_config.json` (one directory up from `Scripts/`). When users install the mod, they copy the entire `Mods/APFrameworkMod` folder to their `ue4ss/Mods/` directory, resulting in `ue4ss/Mods/APFrameworkMod/framework_config.json`.
+
 **File**: `APFrameworkCore/include/ap_config.h`
 
 ```cpp
@@ -947,7 +949,7 @@ TEST_F(APLoggerTest, ConsoleMode) {
 3. ✅ `ap_debug_log.h` and `ap_debug_log.cpp` - Complete implementation
 4. ✅ Updated `ap_types.h` with error handling types
 5. ✅ Unit tests for config and logging
-6. ✅ Example `framework_config.json` in project root
+6. ✅ Example `framework_config.json` in `Mods/APFrameworkMod/`
 
 ---
 

@@ -3,6 +3,7 @@ build/
 bin/
 lib/
 out/
+cmake-build-*/
 
 # CMake
 CMakeCache.txt
@@ -65,6 +66,8 @@ luac.out
 *.log
 test_results/
 coverage/
+Testing/
+APFramework.log
 
 # IDE
 .idea/
@@ -91,9 +94,17 @@ docs/.doctrees/
 APCapabilities.json
 *.ap_config.json.bak
 
-# Ignore compiled client libraries in APFramework mod folder
-APFramework/Scripts/*.dll
-APFramework/Scripts/*.so
+# Ignore compiled client libraries and dependencies in APFramework mod folder
+Mods/APFrameworkMod/Scripts/*.dll
+Mods/APFrameworkMod/Scripts/*.so
+Mods/APFrameworkMod/Scripts/lunajson.lua
+Mods/APFrameworkMod/Scripts/lunajson/**
+
+# Also for ExampleClientMod
+Mods/ExampleClientMod/Scripts/*.dll
+Mods/ExampleClientMod/Scripts/*.so
+Mods/ExampleClientMod/Scripts/lunajson.lua
+Mods/ExampleClientMod/Scripts/lunajson/**
 
 # But keep the directory structure
 !APFramework/Scripts/lib/.gitkeep

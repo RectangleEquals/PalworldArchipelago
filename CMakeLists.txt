@@ -1,0 +1,74 @@
+cmake_minimum_required(VERSION 3.20)
+project(APFramework VERSION 0.1.0 LANGUAGES CXX)
+
+# C++ Standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Build type
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# Output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# Platform checks
+if(NOT WIN32)
+    message(WARNING "This project is currently Windows-only (UE4SS limitation)")
+endif()
+
+# Compiler warnings
+if(MSVC)
+    add_compile_options(/W4 /WX-)
+else()
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Third-party dependencies
+add_subdirectory(third_party/lua-5.4.7)
+
+# Find or add nlohmann_json
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann/json.hpp)
+    message(FATAL_ERROR "nlohmann/json not found in third_party/nlohmann/")
+endif()
+
+# Find or add sol2
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sol2/include/sol/sol.hpp)
+    message(FATAL_ERROR "sol2 not found in third_party/sol2/")
+endif()
+
+# Add apclientpp
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/apclientpp/CMakeLists.txt)
+    message(FATAL_ERROR "apclientpp submodule not initialized. Run: git submodule update --init --recursive")
+endif()
+add_subdirectory(third_party/apclientpp)
+
+# Main projects
+add_subdirectory(APFrameworkCore)
+add_subdirectory(APClientLib)
+
+# Testing
+option(BUILD_TESTS "Build unit and integration tests" ON)
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+# Installation rules (DLLs go in Scripts folder for Lua to load)
+install(TARGETS APFrameworkCore APClientLib
+    RUNTIME DESTINATION Mods/APFrameworkMod/Scripts
+    LIBRARY DESTINATION Mods/APFrameworkMod/Scripts
+)
+
+# Copy lunajson files during install
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson.lua
+    DESTINATION Mods/APFrameworkMod/Scripts
+)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson
+    DESTINATION Mods/APFrameworkMod/Scripts
+    FILES_MATCHING PATTERN "*.lua"
+)
