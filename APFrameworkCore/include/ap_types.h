@@ -1,6 +1,10 @@
 #pragma once
 #include <string>
 #include <cstdint>
+#include <vector>
+#include <filesystem>
+#include <optional>
+#include <nlohmann/json.hpp>
 
 namespace APFramework {
 
@@ -80,6 +84,40 @@ struct VoidResult {
     static VoidResult failure(ErrorCode err, const std::string& msg) {
         return VoidResult{err, msg};
     }
+};
+
+// Mod information structure
+struct IncompatibleEntry {
+    std::string id;                          // Other mod ID
+    std::optional<std::string> versions;     // Version constraint or list
+};
+
+struct ModInfo {
+    std::string mod_id;                      // "author.game.mod_name"
+    std::string name;                        // "Friendly Mod Name"
+    std::string version;                     // "1.0.0"
+    std::string description;
+    std::vector<IncompatibleEntry> incompatible;
+    std::filesystem::path config_path;
+    nlohmann::json capabilities;             // Mod's capability declaration
+    bool is_priority{false};                 // Priority client flag
+};
+
+// Conflict detection structures
+enum class ConflictType {
+    DUPLICATE_ITEM_ID,
+    DUPLICATE_LOCATION_ID,
+    DUPLICATE_ITEM_NAME,
+    DUPLICATE_LOCATION_NAME,
+    INVALID_REGION_REFERENCE,
+    INCOMPATIBLE_MOD
+};
+
+struct ConflictInfo {
+    ConflictType type;
+    std::string description;
+    std::vector<std::string> involved_mods;  // Mod IDs involved in conflict
+    std::string details;                     // Additional context (e.g., "item_id: 1000")
 };
 
 } // namespace APFramework
