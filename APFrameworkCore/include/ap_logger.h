@@ -33,6 +33,9 @@ public:
     // Generic log with level
     void log(LogLevel level, const std::string& message);
 
+    // Log with component prefix
+    void log(LogLevel level, const std::string& component, const std::string& message);
+
     // Set callback for console mode (used by APManager to route logs to priority clients)
     using LogCallback = std::function<void(LogLevel level, const std::string& message)>;
     void set_log_callback(LogCallback callback);

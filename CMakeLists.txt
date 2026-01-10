@@ -28,6 +28,24 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# Compile definitions for apclientpp dependencies
+add_compile_definitions(
+    ASIO_STANDALONE
+    WSWRAP_NO_SSL
+    WSWRAP_NO_COMPRESSION
+    _WEBSOCKETPP_CPP11_RANDOM_DEVICE_
+    _WEBSOCKETPP_CPP11_THREAD_
+    _WEBSOCKETPP_CPP11_TYPE_TRAITS_
+    _WEBSOCKETPP_CPP11_FUNCTIONAL_
+    _WEBSOCKETPP_CPP11_SYSTEM_ERROR_
+    _WEBSOCKETPP_CPP11_MEMORY_
+    _WEBSOCKETPP_CPP11_CHRONO_
+    _WIN32_WINNT=0x0601
+    WIN32_LEAN_AND_MEAN
+    ASIO_NO_WIN32_LEAN_AND_MEAN
+    SOL_ALL_SAFETIES_ON=1
+)
+
 # Third-party dependencies
 add_subdirectory(third_party/lua-5.4.7)
 

@@ -56,6 +56,10 @@ void APLogger::log(LogLevel level, const std::string& message) {
     }
 }
 
+void APLogger::log(LogLevel level, const std::string& component, const std::string& message) {
+    log(level, "[" + component + "] " + message);
+}
+
 void APLogger::trace(const std::string& message) { log(LogLevel::TRACE, message); }
 void APLogger::debug(const std::string& message) { log(LogLevel::DEBUG, message); }
 void APLogger::info(const std::string& message) { log(LogLevel::INFO, message); }

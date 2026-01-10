@@ -41,6 +41,12 @@ target_include_directories(APFrameworkCore
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../third_party
         ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/sol2/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/apclientpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/wswrap/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/websocketpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/valijson/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/nlohmann
+        ${CMAKE_BINARY_DIR}/_deps/asio-src/asio/include
 )
 
 # Link libraries
@@ -57,6 +63,8 @@ if(WIN32)
         NOMINMAX
         WIN32_LEAN_AND_MEAN
     )
+    # Large object files due to apclientpp template expansion
+    target_compile_options(APFrameworkCore PRIVATE /bigobj)
 endif()
 
 # Export symbols for DLL
