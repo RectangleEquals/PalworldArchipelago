@@ -28,7 +28,7 @@ Integrate apclientpp library and implement APClient wrapper for Archipelago serv
 ## Components
 
 ### 1. APClient - apclientpp Wrapper
-### 2. APPollingThread - 60fps Polling Loop
+### 2. APPollingThread - 60fps Polling Loop (Configurable)
 ### 3. Connection Management
 ### 4. Message Queue System
 
