@@ -160,13 +160,17 @@ local function poll_ap_client()
     end
 end
 
--- Initialize on game start
-RegisterInitGameStateHook(function()
-    init_ap_client()
-end)
+-- Initialize on game start using Tick event (most reliable method)
+-- Note: RegisterInitGameStateHook does NOT exist - use RegisterCustomEvent("Tick") instead
+local is_initialized = false
 
--- Poll for messages every frame (or on a timer)
-RegisterHook("/Script/Engine.PlayerController:ClientRestart", function()
+RegisterCustomEvent("Tick", function()
+    if not is_initialized then
+        init_ap_client()
+        is_initialized = true
+    end
+
+    -- Poll for messages every tick (after initialization)
     poll_ap_client()
 end)
 ```

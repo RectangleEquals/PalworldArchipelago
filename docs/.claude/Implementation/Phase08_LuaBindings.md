@@ -96,48 +96,95 @@ return APFramework
 ```
 
 **main.lua Entry Point**:
+
+⚠️ **CRITICAL UE4SS API NOTES**:
+- `RegisterInitGameStateHook` - **DOES NOT EXIST** (hallucinated)
+- `RegisterUnrealEngineShutdownCallback` - **DOES NOT EXIST** (hallucinated)
+- Use `RegisterCustomEvent("Tick", ...)` instead - nearly guaranteed to work across all games
+
+See [ARCHITECTURE.md - UE4SS Lua Integration](../../ARCHITECTURE.md#ue4ss-lua-integration) for full details.
+
 ```lua
 -- APFrameworkMod/Scripts/main.lua
-local APFramework = require("APFramework")
+local current_time = os.clock()
+local last_time = current_time
+local is_initialized = false
 
--- Initialize framework when mod loads
-local function init_framework()
-    print("[APFrameworkMod] Initializing Archipelago Framework...")
+-- IMPORTANT: Use RegisterCustomEvent("Tick") - it's the most reliable initialization method
+-- Game state hooks may not fire in all games or may fire multiple times
 
-    -- Load framework config
-    local config_path = "framework_config.json"
+RegisterCustomEvent("Tick", function()
+    -- Operations here run in the game thread (likely within a blueprint)
+    -- Keep operations minimal to avoid blocking the game thread
+    current_time = os.clock()
+    local delta_time = (current_time - last_time)
 
-    -- Initialize APFrameworkCore
-    local success, err = pcall(function()
-        APFramework:init(config_path)
-        APFramework:start()
-    end)
+    -- Initialize framework once on first tick
+    if not is_initialized then
+        print("[APFrameworkMod] Initializing Archipelago Framework...")
+        local success, err = pcall(function()
+            local APFramework = require("APFramework")
+            APFramework:init("framework_config.json")
+            APFramework:start()
+        end)
 
-    if not success then
-        print("[APFrameworkMod] ERROR: " .. tostring(err))
+        if success then
+            print("[APFrameworkMod] Framework initialized successfully!")
+            is_initialized = true
+        else
+            print("[APFrameworkMod] ERROR: " .. tostring(err))
+            -- Will retry on next tick
+        end
+
+        last_time = current_time
         return
     end
 
-    print("[APFrameworkMod] Framework initialized successfully!")
-end
-
--- Hook into UE4SS lifecycle
-RegisterInitGameStateHook(function()
-    init_framework()
+    -- Optional: Periodic operations after initialization (once per second)
+    if delta_time >= 1.0 then
+        last_time = current_time
+        -- Periodic health checks, statistics, etc. can go here
+    end
 end)
 
--- Clean up on unload
-RegisterUnrealEngineShutdownCallback(function()
-    print("[APFrameworkMod] Shutting down framework...")
-    local manager = APManager.instance()
-    manager:shutdown()
-end)
+-- NOTE: There is NO reliable shutdown hook in UE4SS!
+-- APManager::shutdown() is for CONVENIENCE ONLY and may never be called.
+-- The framework MUST use smart pointers and RAII to ensure no memory leaks
+-- even if shutdown() is never called (game crash, UE4SS termination, etc.)
 ```
 
 **Lua Error Handling**:
 - All C++ exceptions caught and converted to Lua errors
 - Lua pcall() used for safe execution
 - Error messages logged via APLogger
+
+**Lifecycle Management Requirements**:
+
+⚠️ **CRITICAL**: The framework MUST be safe even if `shutdown()` is never called!
+
+**Why This Matters**:
+- UE4SS has NO reliable shutdown hook
+- Shutdown order between mods is undefined
+- Game crashes bypass all cleanup code
+- Objects may be destroyed in arbitrary order
+
+**Design Requirements**:
+1. ✅ **Smart Pointers Everywhere**: Use `std::unique_ptr`, `std::shared_ptr`, `std::weak_ptr` for all heap allocations
+2. ✅ **RAII for All Resources**: File handles, sockets, threads must clean up in destructors
+3. ✅ **Thread Safety**: All threads must be joinable in destructors with timeouts
+4. ✅ **No Dangling Pointers**: Components must not hold raw pointers to potentially destroyed objects
+5. ✅ **Timeout-Based Cleanup**: Use timeouts to prevent indefinite waits during destruction
+6. ✅ **Connection Detection**: IPC connections must detect disconnection and clean up automatically
+
+**Implementation Checklist** (verify during Phase08):
+- [ ] APPollingThread destructor joins thread with 2-second timeout
+- [ ] APIPCServer destructor closes all client connections gracefully
+- [ ] APClient destructor disconnects WebSocket with timeout
+- [ ] APLogger destructor flushes and closes file handle
+- [ ] All component destructors are exception-safe
+- [ ] No memory leaks detected by Valgrind/ASan (future testing)
+
+See [ARCHITECTURE.md - Lifecycle Management & Memory Safety](../../ARCHITECTURE.md#ue4ss-lua-integration) for complete details and code examples.
 
 ---
 
@@ -167,5 +214,14 @@ end)
 
 ---
 
-**Last Updated**: 2026-01-09
+## Notes
+
+- ⚠️ **CRITICAL**: `RegisterInitGameStateHook` and `RegisterUnrealEngineShutdownCallback` are hallucinated APIs that DO NOT EXIST
+- Use `RegisterCustomEvent("Tick", ...)` for initialization - most reliable across all games
+- Framework MUST use smart pointers and RAII - shutdown() may never be called
+- See ARCHITECTURE.md for complete UE4SS Lua Integration guidelines and Lifecycle Management requirements
+
+---
+
+**Last Updated**: 2026-01-10
 **Status**: 🔴 Not Started

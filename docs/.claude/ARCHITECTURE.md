@@ -2395,6 +2395,137 @@ The AP World (Python) integration provides:
 - APModRegistry::mods_ requires mutex (registration can happen from IPC thread)
 - APCapabilities read-only after generation (no mutex needed during RUNNING state)
 
+### UE4SS Lua Integration
+
+**Correct UE4SS API Usage:**
+
+UE4SS provides specific hooks for mod initialization. It's critical to use the **correct** API functions:
+
+**❌ INCORRECT (Hallucinated APIs):**
+- `RegisterInitGameStateHook` - Does NOT exist
+- `RegisterUnrealEngineShutdownCallback` - Does NOT exist
+
+**✅ CORRECT APIs:**
+- `RegisterInitGamePreStateHook()` - Called before game state initialization (may be called multiple times)
+- `RegisterInitGamePostStateHook()` - Called after game state initialization (may be called multiple times)
+- `RegisterCustomEvent("Tick", callback)` - Called continuously during game loop (**RECOMMENDED**)
+
+**IMPORTANT**: Game state hooks (`RegisterInitGamePreStateHook` / `RegisterInitGamePostStateHook`) may:
+1. Be called multiple times if game state changes
+2. Not be called at all if the game doesn't use that initialization pattern
+3. Not be guaranteed to fire at startup
+
+**Recommended: Use Tick Event for Initialization**
+
+The `RegisterCustomEvent("Tick", ...)` approach is **nearly guaranteed** to work across all games and provides:
+- Continuous execution regardless of game state
+- Early startup opportunity (fires as soon as blueprint Tick functions run)
+- Reliable cross-game compatibility
+
+**Lua Tick Example:**
+```lua
+-- APFrameworkMod/Scripts/main.lua
+local current_time = os.clock()
+local last_time = current_time
+local is_initialized = false
+
+-- Operations here run in the shared external UE4SS thread (does not impact game thread)
+-- Execution for all other UE4SS mods are blocked until we return the execution
+-- Can spawn other asynchronous operations here (like inside a C++ lib), but Lua state will change if we call LoopAsync or ExecuteWithDelay here
+
+RegisterCustomEvent("Tick", function()
+    -- Operations here run in the game thread (likely within a blueprint)
+    -- Can check/set is_initialized here, perform any kind of periodic updates, or simply return if already initialized and nothing else needs to be done
+    -- Note that this may be called multiple times per frame since it could be from multiple sources of blueprint Tick functions, which is why we manage our own delta_time via os.clock()
+    -- To ensure we aren't locking up the game thread too much, operations here should either be kept to a minimum, or spawn other asynchronous operations
+    current_time = os.clock()
+    local delta_time = (current_time - last_time)
+
+    -- Initialize framework once
+    if not is_initialized then
+        print("[APFrameworkMod] Initializing Archipelago Framework...")
+        local success, err = pcall(function()
+            local APFramework = require("APFramework")
+            APFramework:init("framework_config.json")
+            APFramework:start()
+        end)
+
+        if success then
+            print("[APFrameworkMod] Framework initialized successfully!")
+            is_initialized = true
+        else
+            print("[APFrameworkMod] ERROR: " .. tostring(err))
+            -- Retry on next tick
+        end
+
+        last_time = current_time
+        return
+    end
+
+    -- Periodic operations (once per second after initialization)
+    if delta_time >= 1.0 then
+        last_time = current_time
+        -- Optional: periodic health checks, statistics, etc.
+    end
+end)
+```
+
+**Lifecycle Management & Memory Safety:**
+
+⚠️ **CRITICAL**: There is **NO reliable shutdown hook** in UE4SS!
+
+**Why This Matters:**
+- No guaranteed callback when mods unload
+- Shutdown order between mods is undefined
+- Game/UE4SS crashes may bypass all cleanup
+- Objects accessed during shutdown may already be destroyed
+
+**Design Requirements:**
+1. **Use Smart Pointers Everywhere**: `std::unique_ptr`, `std::shared_ptr`, `std::weak_ptr`
+2. **Self-Managed Lifecycles**: Components must clean up automatically via destructors
+3. **No Manual shutdown() Dependency**: Framework must be safe even if shutdown() is never called
+4. **Timeout-Based Resource Management**: Use timeouts to detect and clean up stale connections
+5. **RAII (Resource Acquisition Is Initialization)**: All resources must be tied to object lifetime
+
+**APManager::shutdown() is for convenience only** - it should NOT be required for memory safety!
+
+**Implementation Checklist:**
+- ✅ All heap allocations use smart pointers
+- ✅ All threads are joined in destructors (with timeouts)
+- ✅ All file handles use RAII wrappers (ofstream, etc.)
+- ✅ All IPC connections detect disconnection and clean up automatically
+- ✅ Polling thread checks lifecycle state and stops gracefully
+- ✅ No dangling pointers or memory leaks even if shutdown() is never called
+- ✅ Timeouts prevent indefinite waits during cleanup
+
+**Example - APPollingThread Lifecycle:**
+```cpp
+class APPollingThread {
+private:
+    std::thread polling_thread_;
+    std::atomic<bool> should_stop_{false};
+
+public:
+    ~APPollingThread() {
+        // Automatic cleanup in destructor
+        should_stop_ = true;
+
+        if (polling_thread_.joinable()) {
+            // Use timeout to avoid indefinite blocking
+            auto future = std::async(std::launch::async, [this]() {
+                polling_thread_.join();
+            });
+
+            if (future.wait_for(std::chrono::seconds(2)) == std::future_status::timeout) {
+                // Thread didn't exit gracefully - detach and log warning
+                polling_thread_.detach();
+                // This is acceptable since we're shutting down anyway
+            }
+        }
+    }
+};
+```
+
 ### Performance Optimization
 
 **Polling Frequency:**
