@@ -1,0 +1,33 @@
+{
+  "mod_id": "example.palworld.testmod",
+  "mod_name": "Example AP Test Mod",
+  "version": "1.0.0",
+  "description": "Example mod demonstrating APClientLib usage for Archipelago integration",
+  "authors": ["RectangleEquals", "AgStarRay"],
+  "is_priority": false,
+  "capabilities": {
+    "items": [
+      {
+        "id": 5000,
+        "name": "TestItem_ExampleReward",
+        "classification": "filler",
+        "description": "Example filler item for testing"
+      }
+    ],
+    "locations": [
+      {
+        "id": 6000,
+        "name": "TestLocation_ExampleCheck",
+        "type": "static",
+        "region": "TestRegion",
+        "description": "Example location check (e.g., chest opened)"
+      }
+    ],
+    "regions": [
+      {
+        "name": "TestRegion",
+        "entrances": []
+      }
+    ]
+  }
+}
