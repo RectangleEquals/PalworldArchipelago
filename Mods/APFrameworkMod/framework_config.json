@@ -2,7 +2,7 @@
   "ap_server": {
     "server": "archipelago.gg",
     "port": 38281,
-    "slot_name": "",
+    "slot_name": "P1",
     "password": "",
     "auto_reconnect": true,
     "reconnect_delay_ms": 5000,

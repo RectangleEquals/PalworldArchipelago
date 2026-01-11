@@ -3,7 +3,7 @@
   "mod_name": "Example AP Test Mod",
   "version": "1.0.0",
   "description": "Example mod demonstrating APClientLib usage for Archipelago integration",
-  "authors": ["RectangleEquals", "AgStarRay"],
+  "authors": ["RectangleEquals"],
   "is_priority": false,
   "capabilities": {
     "items": [

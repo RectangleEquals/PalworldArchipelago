@@ -27,7 +27,7 @@ RegisterCustomEvent("Tick", function()
     -- Initialize framework once on first tick
     if not is_initialized and not init_attempted then
         init_attempted = true
-        print("[APFrameworkMod] Initializing Archipelago Framework...")
+        print("[APFrameworkMod] Initializing Archipelago Framework...\n")
 
         local success, err = pcall(function()
             -- Initialize framework
@@ -44,11 +44,11 @@ RegisterCustomEvent("Tick", function()
         end)
 
         if success then
-            print("[APFrameworkMod] Framework initialized successfully!")
-            print("[APFrameworkMod] Current phase: " .. APFramework.get_phase_string())
+            print("[APFrameworkMod] Framework initialized successfully!\n")
+            print("[APFrameworkMod] Current phase: " .. APFramework.get_phase_string() .. "\n")
             is_initialized = true
         else
-            print("[APFrameworkMod] ERROR: " .. tostring(err))
+            print("[APFrameworkMod] ERROR: " .. tostring(err) .. "\n")
             -- Reset init_attempted to retry on next tick
             init_attempted = false
         end
@@ -64,7 +64,7 @@ RegisterCustomEvent("Tick", function()
         -- Periodic health checks, statistics, etc. can go here
         -- Example: Log current phase periodically
         -- local phase = APFramework.get_phase_string()
-        -- print("[APFrameworkMod] Status: " .. phase)
+        -- print("[APFrameworkMod] Status: " .. phase .. "\n")
     end
 end)
 

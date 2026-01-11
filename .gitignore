@@ -91,7 +91,8 @@ docs/_build/
 docs/.doctrees/
 
 # APFramework specific
-APCapabilities.json
+APCapabilities*.json
+AP_Capabilities*.json
 *.ap_config.json.bak
 
 # Ignore compiled client libraries and dependencies in APFramework mod folder
@@ -113,8 +114,10 @@ Mods/ExampleClientMod/Scripts/lunajson/**
 worlds/**/__pycache__/
 worlds/**/*.pyc
 
-# Private documentation prompts
-docs/.claude/PreviousPrompts/
+# Private claude files
+.claude/*.json
+docs/PostImplementationFixes.md
+docs/.claude/ImplementationAnalysis.md
 
 # Archive files
 *.zip
@@ -124,3 +127,4 @@ docs/.claude/PreviousPrompts/
 
 # Git patches
 *.patch
+*.diff
