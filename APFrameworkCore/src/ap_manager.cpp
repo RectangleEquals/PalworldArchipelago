@@ -436,11 +436,8 @@ void APManager::handle_connected_and_syncing() {
         config.get_polling_interval()
     );
 
-    auto poll_result = polling_thread_->start();
-    if (!poll_result.is_success()) {
-        enter_error_state("Failed to start polling thread: " + poll_result.error_message);
-        return;
-    }
+    // Start polling thread (returns void, cannot fail)
+    polling_thread_->start();
 
     sync_started = true;
 

@@ -33,6 +33,10 @@ struct VoidResult {
 
     static VoidResult success_result() { return {true, ""}; }
     static VoidResult failure(const std::string& msg) { return {false, msg}; }
+
+    // Methods for consistency with APFramework::VoidResult
+    bool is_success() const { return success; }
+    bool is_failure() const { return !success; }
 };
 
 class APIPCClient {
