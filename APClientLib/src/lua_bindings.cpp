@@ -117,3 +117,18 @@ void register_apclient_bindings(sol::state& lua) {
 }
 
 } // namespace APClientLib
+
+// Lua module entry point (called by require("APClientLib"))
+// This receives the existing Lua state from UE4SS and registers our C++ bindings into it
+extern "C" {
+    __declspec(dllexport) int luaopen_APClientLib(lua_State* L) {
+        // Create sol::state_view from UE4SS's existing Lua state
+        sol::state_view lua(L);
+
+        // Register all APClientLib bindings into this state
+        APClientLib::register_apclient_bindings(lua);
+
+        // Return 1 to indicate module loaded successfully
+        return 1;
+    }
+}

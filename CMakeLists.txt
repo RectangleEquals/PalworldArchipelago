@@ -76,17 +76,44 @@ if(BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# Installation rules (DLLs go in Scripts folder for Lua to load)
-install(TARGETS APFrameworkCore APClientLib
+# Installation rules
+# These DLLs are Lua-loadable libraries (NOT UE4SS C++ mods)
+# They are loaded via require() from UE4SS Lua mods
+
+# Install APFrameworkCore.dll to framework mod
+install(TARGETS APFrameworkCore
     RUNTIME DESTINATION Mods/APFrameworkMod/Scripts
     LIBRARY DESTINATION Mods/APFrameworkMod/Scripts
 )
 
-# Copy lunajson files during install
+# Install APClientLib.dll to BOTH framework and client mods
+# Framework mod provides it for convenience, client mods use it
+install(TARGETS APClientLib
+    RUNTIME DESTINATION Mods/APFrameworkMod/Scripts
+    LIBRARY DESTINATION Mods/APFrameworkMod/Scripts
+)
+install(TARGETS APClientLib
+    RUNTIME DESTINATION Mods/ExampleClientMod/Scripts
+    LIBRARY DESTINATION Mods/ExampleClientMod/Scripts
+)
+
+# Copy APClient.lua wrapper to APFrameworkMod for convenience
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Mods/ExampleClientMod/Scripts/APClient.lua
+    DESTINATION Mods/APFrameworkMod/Scripts
+)
+
+# Copy lunajson Lua library to both mods (for JSON handling in Lua)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson.lua
     DESTINATION Mods/APFrameworkMod/Scripts
 )
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson
     DESTINATION Mods/APFrameworkMod/Scripts
+    FILES_MATCHING PATTERN "*.lua"
+)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson.lua
+    DESTINATION Mods/ExampleClientMod/Scripts
+)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lua/lunajson
+    DESTINATION Mods/ExampleClientMod/Scripts
     FILES_MATCHING PATTERN "*.lua"
 )

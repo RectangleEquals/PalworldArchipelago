@@ -4,6 +4,13 @@
 -- Provides a user-friendly interface for AP-enabled mods to communicate
 -- with the APFramework.
 
+-- Load the APClientLib DLL (registers C++ bindings into this Lua state)
+-- This DLL is a Lua-loadable library, NOT a UE4SS C++ mod
+local success, err = pcall(require, "APClientLib")
+if not success then
+    error("[APClient] Failed to load APClientLib.dll: " .. tostring(err))
+end
+
 local APClient = {}
 APClient.__index = APClient
 

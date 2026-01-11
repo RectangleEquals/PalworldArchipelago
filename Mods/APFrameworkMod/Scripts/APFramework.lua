@@ -5,6 +5,13 @@
 -- All heavy lifting is done in C++ (APFrameworkCore), this just provides
 -- a user-friendly Lua API.
 
+-- Load the APFrameworkCore DLL (registers C++ bindings into this Lua state)
+-- This DLL is a Lua-loadable library, NOT a UE4SS C++ mod
+local success, err = pcall(require, "APFrameworkCore")
+if not success then
+    error("[APFramework] Failed to load APFrameworkCore.dll: " .. tostring(err))
+end
+
 local APFramework = {}
 
 -- Initialize the framework
