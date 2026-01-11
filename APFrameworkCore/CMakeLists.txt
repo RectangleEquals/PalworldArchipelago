@@ -75,3 +75,11 @@ set_target_properties(APFrameworkCore PROPERTIES
     OUTPUT_NAME "APFrameworkCore"
     PREFIX ""
 )
+
+# Post-build: Copy DLL to Mods directory
+add_custom_command(TARGET APFrameworkCore POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:APFrameworkCore>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/APFrameworkMod/Scripts/
+    COMMENT "Copying APFrameworkCore.dll to Mods/APFrameworkMod/Scripts"
+)

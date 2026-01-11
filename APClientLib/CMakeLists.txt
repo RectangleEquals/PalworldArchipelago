@@ -48,3 +48,39 @@ set_target_properties(APClientLib PROPERTIES
     OUTPUT_NAME "APClientLib"
     PREFIX ""
 )
+
+# Post-build: Copy DLL to both mod directories
+add_custom_command(TARGET APClientLib POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:APClientLib>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/APFrameworkMod/Scripts/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:APClientLib>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/ExampleClientMod/Scripts/
+    COMMENT "Copying APClientLib.dll to mod directories"
+)
+
+# Post-build: Copy APClient.lua wrapper to APFrameworkMod
+add_custom_command(TARGET APClientLib POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/ExampleClientMod/Scripts/APClient.lua
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/APFrameworkMod/Scripts/APClient.lua
+    COMMENT "Copying APClient.lua to APFrameworkMod"
+)
+
+# Post-build: Copy lunajson library to both mods
+add_custom_command(TARGET APClientLib POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/lua/lunajson.lua
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/APFrameworkMod/Scripts/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/lua/lunajson.lua
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/ExampleClientMod/Scripts/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/lua/lunajson
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/APFrameworkMod/Scripts/lunajson
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/lua/lunajson
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Mods/ExampleClientMod/Scripts/lunajson
+    COMMENT "Copying lunajson library to mod directories"
+)

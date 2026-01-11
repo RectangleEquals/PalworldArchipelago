@@ -7,7 +7,7 @@
 
 namespace APFramework {
 
-void register_apframework_bindings(sol::state& lua) {
+void register_apframework_bindings(sol::state_view lua) {
     // Register LifecyclePhase enum
     lua.new_enum<LifecyclePhase>("LifecyclePhase",
         {

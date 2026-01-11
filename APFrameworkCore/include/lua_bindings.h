@@ -9,8 +9,8 @@ namespace APFramework {
  * This function exposes the APManager singleton and related types to Lua,
  * allowing the APFrameworkMod to initialize and control the framework.
  *
- * @param lua The sol::state to register bindings with
+ * @param lua The sol::state_view to register bindings with (can be an existing Lua state)
  */
-void register_apframework_bindings(sol::state& lua);
+void register_apframework_bindings(sol::state_view lua);
 
 } // namespace APFramework

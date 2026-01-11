@@ -12,6 +12,7 @@ cmake_install.cmake
 *.cmake
 !CMakeLists.txt
 Makefile
+cmake/
 
 # Compiled binaries
 *.exe

@@ -1,6 +1,7 @@
 #pragma once
 #include "ap_ipc_client.h"
 #include <nlohmann/json.hpp>
+#include <sol/sol.hpp>
 #include <string>
 #include <vector>
 #include <map>
@@ -8,6 +9,13 @@
 #include <functional>
 
 namespace APClientLib {
+
+/**
+ * Register APClientLib bindings with a Lua state
+ *
+ * @param lua The sol::state_view to register bindings with (can be an existing Lua state)
+ */
+void register_apclient_bindings(sol::state_view lua);
 
 /**
  * APClient - High-level client library for AP-enabled mods

@@ -9,9 +9,9 @@ namespace APClientLib {
  * This function exposes the APClient class and related types to Lua,
  * allowing mods to communicate with the APFramework.
  *
- * @param lua The sol::state to register bindings with
+ * @param lua The sol::state_view to register bindings with (can be an existing Lua state)
  */
-void register_apclient_bindings(sol::state& lua) {
+void register_apclient_bindings(sol::state_view lua) {
     // Register VoidResult type
     lua.new_usertype<VoidResult>("APClientResult",
         sol::no_constructor,
