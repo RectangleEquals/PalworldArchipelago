@@ -1,0 +1,8 @@
+{
+  "mod_id": "archipelago.palworld.framework",
+  "mod_name": "Archipelago Framework",
+  "version": "1.0.0",
+  "description": "Core Archipelago Framework providing IPC infrastructure and AP server connection for all AP-enabled mods",
+  "authors": ["RectangleEquals", "AgStarRay"],
+  "is_priority": true
+}
