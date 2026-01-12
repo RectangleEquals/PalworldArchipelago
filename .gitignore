@@ -101,6 +101,7 @@ Mods/APFrameworkMod/Scripts/*.dll
 Mods/APFrameworkMod/Scripts/*.so
 Mods/APFrameworkMod/Scripts/lunajson.lua
 Mods/APFrameworkMod/Scripts/lunajson/**
+Mods/APFrameworkMod/Scripts/APClient.lua
 
 # Also for ExampleClientMod
 Mods/ExampleClientMod/Scripts/*.dll
