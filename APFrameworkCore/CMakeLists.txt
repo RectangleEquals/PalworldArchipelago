@@ -12,6 +12,7 @@ set(SOURCES
     src/ap_capabilities_generator.cpp
     src/ap_message_router.cpp
     src/ap_polling_thread.cpp
+    src/ap_path_utility.cpp
     src/lua_bindings.cpp
     src/main.cpp
 )
@@ -28,6 +29,7 @@ set(HEADERS
     include/ap_capabilities_generator.h
     include/ap_message_router.h
     include/ap_polling_thread.h
+    include/ap_path_utility.h
     include/ap_types.h
 )
 

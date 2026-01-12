@@ -55,7 +55,8 @@ public:
     // Get count of discovered vs registered mods
     size_t get_discovered_count() const;
     size_t get_registered_count() const;
-    size_t get_priority_count() const;
+    size_t get_priority_count() const;  // Returns count of REGISTERED priority mods
+    size_t get_discovered_priority_count() const;  // Returns count of DISCOVERED priority mods
 
     // Clear all registrations (for resync)
     void clear();

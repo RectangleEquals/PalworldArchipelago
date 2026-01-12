@@ -10,8 +10,8 @@
   },
   "framework": {
     "polling_interval_ms": 16,
-    "registration_timeout_ms": 180000,
-    "priority_registration_timeout_ms": 60000,
+    "registration_timeout_ms": 7200,
+    "priority_registration_timeout_ms": 5000,
     "mods_directory": "Mods",
     "game_name": "Palworld"
   },
@@ -22,7 +22,7 @@
     "console": false
   },
   "ipc": {
-    "endpoint": "\\.\pipe\APFramework",
+    "endpoint": "\\\\.\\pipe\\APFramework",
     "timeout_ms": 5000
   }
 }

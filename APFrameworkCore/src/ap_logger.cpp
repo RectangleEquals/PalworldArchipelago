@@ -1,7 +1,9 @@
 #include "ap_logger.h"
+#include "ap_path_utility.h"
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <filesystem>
 
 namespace APFramework {
 
@@ -21,13 +23,54 @@ bool APLogger::init(LogLevel min_level, const std::string& log_file_path, bool c
     console_mode_ = console_mode;
 
     if (!console_mode_) {
+        // Resolve log file path (handle relative paths)
+        std::filesystem::path resolved_path(log_file_path);
+        if (!APPathUtility::is_absolute(resolved_path)) {
+            // Resolve relative to APFrameworkMod root directory
+            auto mods_folder = APPathUtility::find_mods_folder();
+            if (mods_folder.has_value()) {
+                resolved_path = mods_folder.value() / "APFrameworkMod" / log_file_path;
+            } else {
+                // Fallback: resolve relative to DLL directory
+                resolved_path = APPathUtility::to_absolute(resolved_path);
+            }
+        }
+
+        // Ensure parent directory exists
+        auto parent_dir = resolved_path.parent_path();
+        if (!parent_dir.empty() && !APPathUtility::directory_exists(parent_dir)) {
+            std::error_code ec;
+            std::filesystem::create_directories(parent_dir, ec);
+            if (ec) {
+                std::cerr << "Failed to create log directory: " << parent_dir.string() << " (" << ec.message() << ")" << std::endl;
+                return false;
+            }
+        }
+
         // Open log file
-        log_file_.open(log_file_path, std::ios::out | std::ios::app);
+        log_file_.open(resolved_path, std::ios::out | std::ios::app);
         if (!log_file_.is_open()) {
-            std::cerr << "Failed to open log file: " << log_file_path << std::endl;
+            std::cerr << "Failed to open log file: " << resolved_path.string() << std::endl;
             return false;
         }
         log_file_ << "\n=== APFramework Session Started at " << get_timestamp() << " ===\n";
+        log_file_ << "Log file path: " << resolved_path.string() << "\n";
+        log_file_ << "DLL directory: " << APPathUtility::get_dll_directory().string() << "\n";
+
+        // Log UE4SS detection results
+        auto ue4ss_folder = APPathUtility::find_ue4ss_folder();
+        if (ue4ss_folder.has_value()) {
+            log_file_ << "UE4SS folder: " << ue4ss_folder.value().string() << "\n";
+        } else {
+            log_file_ << "UE4SS folder: Not detected\n";
+        }
+
+        auto mods_folder = APPathUtility::find_mods_folder();
+        if (mods_folder.has_value()) {
+            log_file_ << "Mods folder: " << mods_folder.value().string() << "\n";
+        } else {
+            log_file_ << "Mods folder: Not detected\n";
+        }
     }
 
     return true;
@@ -103,8 +146,8 @@ std::string APLogger::level_to_string(LogLevel level) const {
     switch (level) {
         case LogLevel::LOG_TRACE: return "TRACE";
         case LogLevel::LOG_DEBUG: return "DEBUG";
-        case LogLevel::LOG_INFO:  return "INFO ";
-        case LogLevel::LOG_WARN:  return "WARN ";
+        case LogLevel::LOG_INFO:  return "INFO";
+        case LogLevel::LOG_WARN:  return "WARN";
         case LogLevel::LOG_ERROR: return "ERROR";
         case LogLevel::LOG_FATAL: return "FATAL";
         default: return "UNKNOWN";

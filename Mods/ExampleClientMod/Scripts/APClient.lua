@@ -37,15 +37,20 @@ end
 function APClient:init(pipe_name)
     local result
     if pipe_name then
+        print("[APClientWrapper(" .. self.mod_id .. ")]: Connecting to pipe '" .. pipe_name .. "...\n")
         result = self.client:init(self.mod_id, pipe_name)
     else
+        print("[APClientWrapper(" .. self.mod_id .. ")]: Connecting to pipe...\n")
         result = self.client:init(self.mod_id)
     end
 
     if not result:is_success() then
+        print("[APClientWrapper(" .. self.mod_id .. ")]: ERROR: Failed connecting to pipe: '" .. result.error_message .. "...\n")
         return nil, result.error_message
     end
-
+    
+    print("[APClientWrapper(" .. self.mod_id .. ")]: Pipe Connected!\n")
+    
     -- Set up C++ callbacks to route to Lua callbacks
     self.client:on_received_items(function(data)
         self:_trigger_callbacks("received_items", data)

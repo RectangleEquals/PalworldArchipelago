@@ -259,6 +259,19 @@ size_t APModRegistry::get_priority_count() const {
     return count;
 }
 
+size_t APModRegistry::get_discovered_priority_count() const {
+    std::lock_guard<std::mutex> lock(mods_mutex_);
+
+    size_t count = 0;
+    for (const auto& [mod_id, entry] : mods_) {
+        if (entry.discovered && entry.info.is_priority) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
 void APModRegistry::clear() {
     std::lock_guard<std::mutex> lock(mods_mutex_);
 

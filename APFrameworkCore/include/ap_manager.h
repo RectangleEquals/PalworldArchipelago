@@ -109,7 +109,7 @@ private:
     std::atomic<bool> connection_initiated_{false};
 
     // Thread safety
-    mutable std::mutex state_mutex_;
+    mutable std::recursive_mutex state_mutex_;
     std::thread state_machine_thread_;
 
     // Error state info

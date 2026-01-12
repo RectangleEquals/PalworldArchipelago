@@ -1,5 +1,6 @@
 #include "ap_client_lib.h"
 #include <chrono>
+#include <iostream>
 
 namespace APClientLib {
 
@@ -65,8 +66,16 @@ VoidResult APClient::send_command(const std::string& cmd, const nlohmann::json& 
 void APClient::poll() {
     // Get all pending messages and process them
     auto messages = ipc_client_->get_messages();
+
+    // DEBUG: Log message count
+    if (!messages.empty()) {
+        std::cout << "[APClient::poll] Processing " << messages.size() << " messages" << std::endl;
+    }
+
     for (const auto& msg : messages) {
+        std::cout << "[APClient::poll] Handling message type: " << msg.type << std::endl;
         handle_incoming_message(msg);
+        std::cout << "[APClient::poll] Message handled" << std::endl;
     }
 }
 

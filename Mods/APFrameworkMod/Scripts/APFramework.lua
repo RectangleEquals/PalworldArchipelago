@@ -18,7 +18,7 @@ local APFramework = {}
 -- @param config_path Path to framework_config.json (optional, defaults to "framework_config.json")
 -- @return true on success, or nil + error message on failure
 function APFramework.init(config_path)
-    config_path = config_path or "framework_config.json"
+    config_path = config_path or "..\\framework_config.json"
 
     local manager = APManager.instance()
     local result = manager:init(config_path)

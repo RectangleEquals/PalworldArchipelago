@@ -1,4 +1,5 @@
 #include "ap_config.h"
+#include "ap_path_utility.h"
 #include <fstream>
 #include <sstream>
 
@@ -104,9 +105,41 @@ bool APConfig::validate() const {
     validate_field(!framework_.game_name.empty(),
                    "framework.game_name cannot be empty");
 
+    // Validate mods_directory path exists
+    auto mods_path = APPathUtility::resolve_path(framework_.mods_directory);
+    if (!mods_path.has_value()) {
+        // If user provided an absolute path that doesn't exist, that's an error
+        if (APPathUtility::is_absolute(framework_.mods_directory)) {
+            errors_.push_back("framework.mods_directory path does not exist: " + framework_.mods_directory);
+        } else {
+            // If relative, try auto-detecting Mods folder
+            auto detected_mods = APPathUtility::find_mods_folder();
+            if (!detected_mods.has_value()) {
+                errors_.push_back("framework.mods_directory could not be resolved: " + framework_.mods_directory +
+                                " (tried resolving relative to DLL, ue4ss, and auto-detection)");
+            }
+        }
+    }
+
     // Validate logging settings
     validate_field(!logging_.file.empty() || logging_.console,
                    "Must enable either file logging or console logging");
+
+    // If logging to file, validate the directory path exists (or can be created)
+    if (!logging_.file.empty() && logging_.enabled) {
+        std::filesystem::path log_path(logging_.file);
+
+        // If relative path, it will be resolved relative to DLL directory
+        if (!APPathUtility::is_absolute(log_path)) {
+            log_path = APPathUtility::to_absolute(log_path);
+        }
+
+        // Check if parent directory exists
+        auto parent_dir = log_path.parent_path();
+        if (!parent_dir.empty() && !APPathUtility::directory_exists(parent_dir)) {
+            errors_.push_back("logging.file parent directory does not exist: " + parent_dir.string());
+        }
+    }
 
     // Validate IPC settings
     validate_field(!ipc_.endpoint.empty(), "ipc.endpoint cannot be empty");
@@ -117,6 +150,42 @@ bool APConfig::validate() const {
 
 std::vector<std::string> APConfig::get_errors() const {
     return errors_;
+}
+
+std::filesystem::path APConfig::get_mods_directory() const {
+    // Try to resolve the mods directory path
+    auto resolved = APPathUtility::resolve_path(framework_.mods_directory);
+
+    if (resolved.has_value()) {
+        return resolved.value();
+    }
+
+    // If can't resolve from config, try auto-detecting
+    auto detected = APPathUtility::find_mods_folder();
+    if (detected.has_value()) {
+        return detected.value();
+    }
+
+    // Fallback: return as absolute path from DLL directory
+    return APPathUtility::to_absolute(framework_.mods_directory);
+}
+
+std::filesystem::path APConfig::get_log_file_path() const {
+    std::filesystem::path log_path(logging_.file);
+
+    // If absolute, return as-is
+    if (APPathUtility::is_absolute(log_path)) {
+        return log_path;
+    }
+
+    // Otherwise resolve relative to APFrameworkMod root directory
+    auto mods_folder = APPathUtility::find_mods_folder();
+    if (mods_folder.has_value()) {
+        return mods_folder.value() / "APFrameworkMod" / log_path;
+    }
+
+    // Fallback: resolve relative to DLL directory
+    return APPathUtility::to_absolute(log_path);
 }
 
 LogLevel APConfig::parse_log_level(const std::string& level_str) const {

@@ -1,6 +1,7 @@
 #include "ap_manager.h"
 #include "ap_config.h"
 #include "ap_logger.h"
+#include "ap_path_utility.h"
 #include "ap_ipc_server.h"
 #include "ap_mod_registry.h"
 #include "ap_capabilities_generator.h"
@@ -8,6 +9,7 @@
 #include "ap_message_router.h"
 #include "ap_polling_thread.h"
 #include <sstream>
+#include <filesystem>
 
 namespace APFramework {
 
@@ -34,19 +36,39 @@ bool APManager::is_running() const {
 // ============================================================================
 
 VoidResult APManager::init(const std::string& config_path) {
-    std::lock_guard<std::mutex> lock(state_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
 
     auto& logger = APLogger::instance();
     auto& config = APConfig::instance();
 
+    // Resolve config file path
+    std::filesystem::path resolved_config_path;
+    if (APPathUtility::is_absolute(config_path)) {
+        // Absolute path - validate it exists
+        if (!APPathUtility::file_exists(config_path)) {
+            return VoidResult::failure(ErrorCode::CONFIG_ERROR,
+                "Config file not found: " + config_path);
+        }
+        resolved_config_path = config_path;
+    } else {
+        // Relative path - try resolving with multiple strategies
+        auto resolved = APPathUtility::resolve_path(config_path);
+        if (!resolved.has_value()) {
+            return VoidResult::failure(ErrorCode::CONFIG_ERROR,
+                "Config file could not be resolved: " + config_path +
+                " (tried: DLL directory, ue4ss folder, Mods folder)");
+        }
+        resolved_config_path = resolved.value();
+    }
+
     // Load configuration
-    if (!config.load(config_path)) {
+    if (!config.load(resolved_config_path)) {
         std::string errors;
         for (const auto& err : config.get_errors()) {
             errors += err + "\n";
         }
         return VoidResult::failure(ErrorCode::CONFIG_ERROR,
-            "Failed to load configuration: " + errors);
+            "Failed to load configuration from " + resolved_config_path.string() + ": " + errors);
     }
 
     // Validate configuration
@@ -115,7 +137,7 @@ VoidResult APManager::init(const std::string& config_path) {
 // ============================================================================
 
 VoidResult APManager::start() {
-    std::lock_guard<std::mutex> lock(state_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
 
     auto& logger = APLogger::instance();
 
@@ -225,7 +247,7 @@ void APManager::run_state_machine() {
 // ============================================================================
 
 void APManager::transition_to(LifecyclePhase new_phase) {
-    std::lock_guard<std::mutex> lock(state_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
 
     auto& logger = APLogger::instance();
     LifecyclePhase old_phase = current_phase_.load();
@@ -243,7 +265,7 @@ void APManager::transition_to(LifecyclePhase new_phase) {
 }
 
 void APManager::enter_error_state(const std::string& error_msg) {
-    std::lock_guard<std::mutex> lock(state_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
 
     auto& logger = APLogger::instance();
 
@@ -299,7 +321,7 @@ void APManager::handle_discovering_mods() {
     }
 
     size_t discovered_count = mod_registry_->get_discovered_count();
-    size_t priority_count = mod_registry_->get_priority_count();
+    size_t priority_count = mod_registry_->get_discovered_priority_count();
 
     logger.log(LogLevel::LOG_INFO, "APManager",
         "Discovered " + std::to_string(discovered_count) + " mods (" +
@@ -619,7 +641,7 @@ VoidResult APManager::handle_command(const std::string& cmd, const nlohmann::jso
 // ============================================================================
 
 VoidResult APManager::trigger_resync() {
-    std::lock_guard<std::mutex> lock(state_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
 
     auto& logger = APLogger::instance();
 
@@ -754,7 +776,7 @@ void APManager::setup_console_log_routing() {
 // ============================================================================
 
 void APManager::shutdown() {
-    std::lock_guard<std::mutex> lock(state_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
 
     auto& logger = APLogger::instance();
 

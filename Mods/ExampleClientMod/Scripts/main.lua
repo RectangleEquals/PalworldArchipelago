@@ -114,10 +114,15 @@ end
 local current_time = os.clock()
 local last_time = current_time
 
+print("[ExampleClientMod] About to register Tick handler\n")
+
 RegisterCustomEvent("Tick", function()
+    print("[ExampleClientMod]: Tick handler called!\n")
     if not is_initialized then
+        print("[ExampleClientMod]: Initializing...\n")
         local success = init_ap_client()
         if success then
+            print("[ExampleClientMod]: Initialized!\n")
             is_initialized = true
         end
         last_time = os.clock()
@@ -125,6 +130,7 @@ RegisterCustomEvent("Tick", function()
     end
 
     -- Poll for messages every tick
+    print("[ExampleClientMod]: Polling...\n")
     poll_ap_client()
 
     -- Optional: Periodic status logging (once per second)
@@ -132,6 +138,7 @@ RegisterCustomEvent("Tick", function()
     local delta_time = (current_time - last_time)
     if delta_time >= 1.0 then
         last_time = current_time
+        print("[ExampleClientMod]: Tick...\n")
         -- Periodic operations can go here
     end
 end)
@@ -144,4 +151,4 @@ end)
 --     on_chest_opened(chest_id)
 -- end)
 
-print("[ExampleMod] Loaded - will initialize on first tick")
+print("[ExampleMod] Loaded - will initialize on first tick\n")

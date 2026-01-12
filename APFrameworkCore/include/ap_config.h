@@ -50,17 +50,13 @@ public:
     std::chrono::milliseconds get_priority_registration_timeout() const {
         return std::chrono::milliseconds(framework_.priority_registration_timeout_ms);
     }
-    std::filesystem::path get_mods_directory() const {
-        return std::filesystem::path(framework_.mods_directory);
-    }
+    std::filesystem::path get_mods_directory() const;
     const std::string& get_game_name() const { return framework_.game_name; }
 
     // Logging settings
     bool is_logging_enabled() const { return logging_.enabled; }
     LogLevel get_log_level() const { return logging_.level; }
-    std::filesystem::path get_log_file_path() const {
-        return std::filesystem::path(logging_.file);
-    }
+    std::filesystem::path get_log_file_path() const;
     bool should_log_to_console() const { return logging_.console; }
 
     // IPC settings
